@@ -1,0 +1,7 @@
+MQL/
+node_modules/
+.env
+.vscode/
+package-lock.json
+test.js
+*.log
