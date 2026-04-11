@@ -1,89 +1,117 @@
 # AXER AI Trading System
 
-ระบบเทรดอัตโนมัติ AXER EA + AI Analysis Server  
-AI วิเคราะห์เทรนด์และให้ Decision (BUY/SELL/HOLD) ผ่าน g4f.space ฟรี 12 providers
+ระบบเทรดอัตโนมัติ MetaTrader EA + AI Analysis Server  
+AI วิเคราะห์ตลาดและให้สัญญาณ BUY/SELL/HOLD ผ่าน Pollinations + DeepInfra (ฟรี 47+ models)
 
 ```
-┌─────────────────────────┐
-│   MetaTrader 4 (AXER)   │
-│   Hedging + Grid + News │
-│   AI Trend Filter       │
-└────────┬────────────────┘
-         │ WebRequest POST JSON
+┌────────────────────────────┐
+│   MetaTrader 4 (AXER EA)  │
+│   Hedging + Grid + News   │
+│   AI Trend Filter          │
+└────────┬───────────────────┘
+         │ WinInet POST JSON
          ▼
-┌─────────────────────────┐
-│   Node.js API Server    │
-│   Express + Auth        │
-└────────┬────────────────┘
+┌────────────────────────────┐
+│   Node.js API Server       │
+│   Express + Auth + Helmet  │
+│   Rate Limiting            │
+└────────┬───────────────────┘
          │ fetch (OpenAI-compatible)
          ▼
-┌─────────────────────────┐
-│   g4f.space Free API    │
-│   12 providers fallback │
-│   gemini → groq → poll. │
-└─────────────────────────┘
+┌────────────────────────────┐
+│   AI Providers (Free)      │
+│   Pollinations: 26 models  │
+│   DeepInfra: 21 models     │
+│   Auto-fallback chain      │
+└────────────────────────────┘
 ```
 
 ---
 
-# Part 1: API Server
-
-Node.js Express server รับข้อมูลจาก EA แล้วส่งต่อให้ AI วิเคราะห์
-
 ## โครงสร้างไฟล์
 
 ```
-├── index.js          # API Server หลัก
-├── package.json      # Dependencies
-├── .env              # AI_API_KEY, PORT
-├── test.js           # ตัวทดสอบ API
+├── index.js              # API Server หลัก
+├── package.json          # Dependencies
+├── .env                  # AI_API_KEY, PORT
 └── MQL/
-    ├── AXER AI.mq4         # AXER EA (AI-integrated)
-    ├── AI_Connector.mq4    # Standalone AI Connector (MT4)
-    └── AI_Connector.mq5    # Standalone AI Connector (MT5)
+    ├── AXER AI.mq4       # AXER EA (AI-integrated)
+    ├── AI_Models.mqh     # ENUM + ModelToString (auto-gen จาก server)
+    ├── AI_Connector.mq4  # Standalone AI Connector (MT4)
+    └── AI_Connector.mq5  # Standalone AI Connector (MT5)
 ```
 
-## ติดตั้ง
+---
+
+## Part 1: API Server
+
+### ติดตั้ง
 
 ```bash
-cd "API EA AI"
+git clone https://github.com/lowcode-np/API-EA-AI.git
+cd API-EA-AI
 npm install
 ```
 
-## ตั้งค่า `.env`
+### ตั้งค่า `.env`
 
 ```env
-AI_API_KEY="EAAITESTKEY12345#"
+AI_API_KEY=your-secret-api-key-here
 PORT=8000
+BASE_URL=https://axer-ai.onrender.com
 ```
 
-> `AI_API_KEY` ใช้ยืนยันตัวตนระหว่าง EA กับ Server (ไม่เกี่ยวกับ AI provider — g4f.space ฟรีไม่ต้องใช้ key)
+| ตัวแปร | คำอธิบาย |
+|--------|----------|
+| `AI_API_KEY` | API key สำหรับ auth ระหว่าง EA ↔ Server |
+| `PORT` | พอร์ตที่ server listen (default: 8000) |
+| `BASE_URL` | URL สำหรับ `/models/check` download link |
 
-## รัน Server
+### รัน Server
 
 ```bash
-npm start          # Production
-npm run dev        # Development (auto-reload)
+npm start        # Production
+npm run dev      # Dev (auto-reload)
 ```
 
-```
-SolunaAI Trading API running on port 8000
-g4f fallback chain: 12 providers
-```
+### Security Features
 
-## API Endpoints
+- **Helmet** — Security headers (X-Content-Type-Options, X-Frame-Options, etc.)
+- **Rate Limiting** — 30 req/min ต่อ IP สำหรับ `/analyze`, 120 req/min global
+- **Timing-safe auth** — ป้องกัน timing attack บน API key
+- **Input validation** — ตรวจ required fields ก่อนประมวลผล
+- **Request timeout** — 30s timeout ต่อ AI provider call
+- **Sanitized model name** — ป้องกัน log injection
 
-### `GET /health`
+---
+
+### API Endpoints
+
+#### `GET /health`
 
 Health check (ไม่ต้อง auth)
 
 ```json
-{ "status": "ok", "timestamp": "2026-04-11T12:00:00.000Z" }
+{ "status": "ok", "providers": 47, "timestamp": "2026-04-11T12:00:00.000Z" }
 ```
 
-### `POST /analyze`
+#### `GET /models`
 
-วิเคราะห์ตลาดด้วย AI
+แสดง model ทั้งหมดที่ใช้ได้ (ไม่ต้อง auth)
+
+```json
+{
+  "count": 47,
+  "models": [
+    { "model": "openai", "provider": "pollinations" },
+    { "model": "Qwen/Qwen3.5-27B", "provider": "deepinfra" }
+  ]
+}
+```
+
+#### `POST /analyze`
+
+วิเคราะห์ตลาดด้วย AI (ต้อง auth, rate limited 30/min)
 
 **Headers:**
 
@@ -92,9 +120,7 @@ Health check (ไม่ต้อง auth)
 | `Content-Type` | `application/json` |
 | `x-api-key` | ค่าเดียวกับ `AI_API_KEY` ใน `.env` |
 
-**Body:** JSON payload จาก EA (30+ fields — ดูหัวข้อ Data Fields)
-
-**Response (200):**
+**Response:**
 
 ```json
 {
@@ -109,94 +135,157 @@ Health check (ไม่ต้อง auth)
     "risk_level": "MEDIUM",
     "key_levels": { "support": 2338.00, "resistance": 2360.00 }
   },
-  "used_model": "gemini/models/gemini-2.5-flash",
-  "raw": "...",
+  "used_model": "pollinations/openai",
   "analyzed_at": "2026-04-11T12:00:05.000Z"
 }
 ```
 
-**Error (401):** `{ "success": false, "message": "Unauthorized" }`  
-**Error (500):** `{ "success": false, "error": "All providers failed..." }`
-
-## Provider Fallback Chain
-
-เรียงลำดับ: ฟรีก่อน → Pollinations ทีหลัง  
-ถ้ามี `preferred_model` จะลองตัวนั้นก่อน  
-เจอ 429 (Rate Limit) หยุดทันที ไม่ลองต่อ
-
-| # | Endpoint | Model | หมายเหตุ |
-|---|----------|-------|----------|
-| 1 | gemini | gemini-2.5-flash | ฟรี แนะนำ |
-| 2 | groq | llama-3.3-70b-versatile | ฟรี |
-| 3 | groq | qwen/qwen3-32b | ฟรี |
-| 4 | groq | openai/gpt-oss-120b | ฟรี |
-| 5 | pollinations | openai | อาจต้องใช้ credits |
-| 6 | pollinations | deepseek | |
-| 7 | pollinations | openai-large | |
-| 8 | pollinations | claude-fast | |
-| 9 | pollinations | grok | |
-| 10 | pollinations | gemini-fast | |
-| 11 | pollinations | mistral | |
-| 12 | pollinations | kimi | |
-
-## ทดสอบ
-
-```bash
-# เปิด Server ก่อน แล้วรัน:
-node test.js              # ใช้ Auto model
-node test.js deepseek     # ระบุ model
-node test.js gemini-2.5-flash
-```
-
-## Deploy (Render)
-
-1. Push โค้ดขึ้น GitHub
-2. สร้าง Web Service บน [render.com](https://render.com)
-3. ตั้ง Build Command: `npm install`
-4. Start Command: `npm start`
-5. เพิ่ม Environment Variable: `AI_API_KEY`
+| Status | ความหมาย |
+|--------|----------|
+| 200 | สำเร็จ |
+| 400 | ขาด field ที่จำเป็น (symbol, timeframe) |
+| 401 | API key ไม่ถูกต้อง |
+| 429 | เกิน rate limit |
+| 500 | AI providers ทั้งหมดล้มเหลว |
 
 ---
 
-# Part 2: AXER AI EA (MQL4)
+### Developer Endpoints (สำหรับผู้พัฒนา)
+
+#### `GET /models/check`
+
+ตรวจสอบว่า model list มีอัปเดตหรือไม่
+
+```
+GET /models/check?hash=<hash_เดิม>
+```
+
+```json
+{
+  "version": 2,
+  "hash": "c412e9a09df1ad02504119c89b215b55",
+  "count": 47,
+  "updated_at": "2026-04-11T12:00:00.000Z",
+  "outdated": true,
+  "download_url": "https://axer-ai.onrender.com/models/mqh"
+}
+```
+
+| Field | คำอธิบาย |
+|-------|----------|
+| `version` | เลข version (เพิ่มทุกครั้งที่ model list เปลี่ยน) |
+| `hash` | MD5 hash ของ model list ปัจจุบัน |
+| `outdated` | `true` ถ้า hash ที่ส่งมาไม่ตรงกับ server |
+| `download_url` | URL สำหรับดาวน์โหลด .mqh ใหม่ |
+
+#### `GET /models/mqh`
+
+ดาวน์โหลดไฟล์ `AI_Models.mqh` (ENUM + ModelToString)
+
+```bash
+curl -o AI_Models.mqh https://axer-ai.onrender.com/models/mqh
+```
+
+Response Headers:
+- `X-Model-Hash` — hash ปัจจุบัน (เก็บไว้ใช้กับ `/models/check`)
+- `X-Model-Version` — เลข version
+
+#### `POST /models/refresh`
+
+บังคับ refresh model list จาก providers (ต้อง auth)
+
+```bash
+curl -X POST -H "x-api-key: YOUR_KEY" https://axer-ai.onrender.com/models/refresh
+```
+
+---
+
+### วิธีอัปเดต Model List (สำหรับผู้พัฒนา)
+
+1. เรียก `GET /models/check` → เก็บ `hash`
+2. ครั้งถัดไป เรียก `GET /models/check?hash=<hash_เดิม>`
+3. ถ้า `outdated: true` → ดาวน์โหลด `GET /models/mqh`
+4. บันทึกทับ `AI_Models.mqh` → Compile EA ใหม่
+
+Server จะ auto-refresh model list จาก Pollinations + DeepInfra ทุก 24 ชม.
+
+---
+
+### AI Provider System
+
+Server ดึง model list อัตโนมัติจาก:
+- **Pollinations** (`gen.pollinations.ai/text/models`) — 26+ text models
+- **DeepInfra** (`api.deepinfra.com/models/featured`) — 21+ text-generation models
+
+**Smart Matching:** เมื่อ EA ส่ง `preferred_model`:
+1. exact match → ใช้ model นั้นเลย
+2. partial match → เช่น "deepseek" จะ match "deepseek-ai/DeepSeek-V3.2"
+3. ไม่เจอ → inject เป็น Pollinations ลองส่งตรง (รองรับ model ใหม่)
+4. ล้มเหลว → fallback ไปยัง model ถัดไปตามลำดับ
+5. เจอ 429 rate limit → หยุดทันที ไม่ลองต่อ
+
+---
+
+### Deploy (Render)
+
+1. Push โค้ดขึ้น GitHub
+2. สร้าง Web Service บน [render.com](https://render.com)
+3. Build Command: `npm install`
+4. Start Command: `npm start`
+5. Environment Variables: `AI_API_KEY`, `PORT`, `BASE_URL`
+
+---
+
+## Part 2: AXER AI EA (MQL4)
 
 EA เทรดอัตโนมัติแบบ Hedging + Grid Recovery พร้อม AI Trend Analysis
 
-## Features
+### Features
 
 | Feature | Description |
 |---------|-------------|
-| **AI Trend Filter** | ใช้ AI (g4f.space) วิเคราะห์เทรนด์แทน SMA เดิม |
-| **Hedging Grid** | เปิดออเดอร์ทั้ง Buy/Sell ตาม candle direction |
-| **ATR Recovery Layer** | เพิ่ม lot size เมื่อ drawdown ถึงระยะ ATR |
+| **AI Trend Filter** | AI วิเคราะห์เทรนด์ 47+ models |
+| **Hedging Grid** | เปิด Buy/Sell ตาม candle direction |
+| **ATR Recovery** | เพิ่ม lot size เมื่อ drawdown ถึงระยะ ATR |
 | **Auto Netting** | ปิดคู่ออเดอร์ที่ imbalance เมื่อ ATR ต่ำ |
-| **Trend Pruning** | ปิดออเดอร์สวนเทรนด์ที่มีกำไร |
-| **News Filter** | หยุดเปิดออเดอร์ช่วงข่าว (FXStreet calendar) |
+| **News Filter** | หยุดเปิดช่วงข่าว (FXStreet calendar) |
 | **NFP Protection** | หยุด 3 ชม. ก่อน/หลัง Non-Farm Payrolls |
-| **Dashboard** | แสดง Trend, S/R, Account, Profit บนชาร์ต |
-| **AI Panel** | แสดง AI Decision, Confidence, Reason, Entry/SL/TP |
-| **Push Notifications** | แจ้งเตือนปิดออเดอร์ + Daily Summary |
-| **Logging** | บันทึกทุก action ลงไฟล์ .log |
+| **Dashboard** | แสดง Trend, S/R, Account, AI Status |
 
-## ติดตั้ง EA
+### ติดตั้ง EA
 
-1. คัดลอก `AXER AI.mq4` ไปยัง `MQL4/Experts/`
-2. เปิด **MetaEditor** กด **Compile** (F7)
-3. **Tools → Options → Expert Advisors**
-   - ✅ Allow DLL imports (ใช้ Wininet.dll สำหรับข่าว)
+1. คัดลอก `AXER AI.mq4` + `AI_Models.mqh` ไปยัง `MQL4/Experts/`
+2. เปิด **MetaEditor** → Compile (F7)
+3. **Tools → Options → Expert Advisors:**
+   - ✅ Allow DLL imports
    - ✅ Allow WebRequest for listed URL
-   - เพิ่ม: `https://your-app.onrender.com`
+   - เพิ่ม: `https://axer-ai.onrender.com`
    - เพิ่ม: `http://calendar.fxstreet.com`
 4. ลาก EA ไปวางบน Chart
 
-## ตั้งค่า API (Hardcoded)
-
-แก้ไขค่าในโค้ดก่อน Compile:
+### ตั้งค่า API (ในโค้ด)
 
 ```mql4
-string   AI_API_URL  = "https://your-app-name.onrender.com/analyze";  // ← แก้ URL
-string   AI_API_KEY  = "EAAITESTKEY12345";                            // ← แก้ Key ให้ตรงกับ .env
+string AI_API_URL = "https://axer-ai.onrender.com/analyze";
+string AI_API_KEY = "your-secret-api-key-here";
 ```
+
+### AI Model Selection
+
+เลือกได้จาก dropdown ใน EA Input:
+
+| กลุ่ม | Models |
+|-------|--------|
+| **Pollinations** | OpenAI, Gemini, Claude, Grok, Mistral, Nova, Qwen, Perplexity |
+| **Shared** | DeepSeek, Kimi, GLM, MiniMax (auto-fallback ทั้ง 2 provider) |
+| **DeepInfra** | Qwen3.5 (8 sizes), Qwen3 Max, Gemma 4, Nemotron, GLM-5.1, Step |
+| **Custom** | พิมพ์ชื่อ model เองใน `CustomModelName` |
+
+---
+
+## License
+
+MIT
 
 ## Input Parameters
 
