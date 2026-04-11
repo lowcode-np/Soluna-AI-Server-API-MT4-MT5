@@ -9,27 +9,23 @@ app.use(express.json({ limit: '1mb' }));
 // ===== Configuration =====
 const API_KEY = process.env.AI_API_KEY;
 
-// ===== G4F AI Provider =====
-const G4F_PROVIDERS = [
-    { url: 'https://g4f.space/api/gemini',       model: 'models/gemini-2.5-flash' },
-    { url: 'https://g4f.space/api/groq',         model: 'llama-3.3-70b-versatile' },
-    { url: 'https://g4f.space/api/groq',         model: 'qwen/qwen3-32b' },
-    { url: 'https://g4f.space/api/groq',         model: 'openai/gpt-oss-120b' },
-    { url: 'https://g4f.space/api/pollinations', model: 'openai' },
-    { url: 'https://g4f.space/api/pollinations', model: 'deepseek' },
-    { url: 'https://g4f.space/api/pollinations', model: 'openai-large' },
-    { url: 'https://g4f.space/api/pollinations', model: 'claude-fast' },
-    { url: 'https://g4f.space/api/pollinations', model: 'grok' },
-    { url: 'https://g4f.space/api/pollinations', model: 'gemini-fast' },
-    { url: 'https://g4f.space/api/pollinations', model: 'mistral' },
-    { url: 'https://g4f.space/api/pollinations', model: 'kimi' },
+// ===== AI Providers (direct APIs, no g4f proxy) =====
+const AI_PROVIDERS = [
+    { url: 'https://text.pollinations.ai/openai', model: 'openai',       name: 'pollinations' },
+    { url: 'https://text.pollinations.ai/openai', model: 'openai-large', name: 'pollinations' },
+    { url: 'https://text.pollinations.ai/openai', model: 'deepseek',     name: 'pollinations' },
+    { url: 'https://text.pollinations.ai/openai', model: 'mistral',      name: 'pollinations' },
+    { url: 'https://text.pollinations.ai/openai', model: 'gemini-fast',  name: 'pollinations' },
+    { url: 'https://text.pollinations.ai/openai', model: 'claude-fast',  name: 'pollinations' },
+    { url: 'https://text.pollinations.ai/openai', model: 'grok',         name: 'pollinations' },
+    { url: 'https://text.pollinations.ai/openai', model: 'kimi',         name: 'pollinations' },
 ];
 
 // ===== AI Provider (with auto-fallback) =====
 
 async function askAI(systemPrompt, userPrompt, preferredModel) {
     // จัดลำดับ provider: ถ้ามี preferred model ให้ลองตัวนั้นก่อน
-    let providers = [...G4F_PROVIDERS];
+    let providers = [...AI_PROVIDERS];
     if (preferredModel && preferredModel !== 'auto') {
         const preferred = providers.filter(p => p.model === preferredModel || p.model.includes(preferredModel));
         const rest = providers.filter(p => p.model !== preferredModel && !p.model.includes(preferredModel));
@@ -43,7 +39,7 @@ async function askAI(systemPrompt, userPrompt, preferredModel) {
     const errors = [];
     for (const provider of providers) {
         try {
-            const resp = await fetch(`${provider.url}/chat/completions`, {
+            const resp = await fetch(provider.url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -66,10 +62,10 @@ async function askAI(systemPrompt, userPrompt, preferredModel) {
             const data = await resp.json();
             const content = data.choices?.[0]?.message?.content;
             if (!content) throw new Error('Empty response');
-            console.log(`  -> Success: ${provider.url.split('/api/')[1]}/${provider.model}`);
-            return { content, model: provider.model, endpoint: provider.url.split('/api/')[1] };
+            console.log(`  -> Success: ${provider.name}/${provider.model}`);
+            return { content, model: provider.model, endpoint: provider.name };
         } catch (e) {
-            console.log(`  -> Failed: ${provider.url.split('/api/')[1]}/${provider.model} - ${e.message.substring(0, 60)}`);
+            console.log(`  -> Failed: ${provider.name}/${provider.model} - ${e.message.substring(0, 60)}`);
             errors.push(`${provider.model}: ${e.message}`);
             // หยุดทันทีถ้า rate limit — ลองต่อไปก็โดนเหมือนกัน
             if (e.message.includes('Rate limited')) break;
@@ -149,7 +145,7 @@ Reply JSON:{decision:BUY/SELL/HOLD,confidence:1-100,entry_price,stop_loss,take_p
 const PORT = process.env.PORT;
 app.listen(PORT, () => {
     console.log(`SolunaAI Trading API running on port ${PORT}`);
-    console.log(`g4f fallback chain: ${G4F_PROVIDERS.length} providers`);
+    console.log(`Pollinations direct: ${AI_PROVIDERS.length} providers`);
 });
 
 module.exports = app;
