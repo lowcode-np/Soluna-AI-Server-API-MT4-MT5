@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
 // ===== Configuration =====
-const API_KEY = process.env.AI_API_KEY || "EAAITESTKEY12345";
+const API_KEY = process.env.AI_API_KEY;
 
 // ===== G4F AI Provider =====
 const G4F_PROVIDERS = [
@@ -146,7 +146,7 @@ Reply JSON:{decision:BUY/SELL/HOLD,confidence:1-100,entry_price,stop_loss,take_p
     }
 });
 
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT;
 app.listen(PORT, () => {
     console.log(`SolunaAI Trading API running on port ${PORT}`);
     console.log(`g4f fallback chain: ${G4F_PROVIDERS.length} providers`);
