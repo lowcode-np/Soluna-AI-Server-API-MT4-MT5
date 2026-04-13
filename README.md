@@ -1,7 +1,7 @@
 # SolunaAI — AI Trading Analysis for MetaTrader
 
 AI Analysis Library + API Server สำหรับ MetaTrader 4/5  
-วิเคราะห์ตลาดด้วย AI 47+ models (Pollinations + DeepInfra) ฟรี ไม่มีค่าใช้จ่าย
+วิเคราะห์ตลาดด้วย AI 47+ models ฟรี ไม่มีค่าใช้จ่าย
 
 ```
 ┌────────────────────────────┐
