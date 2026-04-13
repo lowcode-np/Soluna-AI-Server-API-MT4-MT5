@@ -46,6 +46,83 @@ function isValidApiKey(input) {
 // AI provider request timeout (ms)
 const AI_FETCH_TIMEOUT = 30000;
 
+// ===== Analysis Cache =====
+// Cache TTL per timeframe (ms) — แต่ละ timeframe มีอายุ cache ต่างกัน
+const CACHE_TTL = {
+    'M1':  45 * 1000,       // 45 วินาที
+    'M5':  2 * 60 * 1000,   // 2 นาที
+    'M15': 5 * 60 * 1000,   // 5 นาที
+    'M30': 10 * 60 * 1000,  // 10 นาที
+    'H1':  20 * 60 * 1000,  // 20 นาที
+    'H4':  45 * 60 * 1000,  // 45 นาที
+    'D1':  2 * 60 * 60 * 1000,  // 2 ชั่วโมง
+    'W1':  6 * 60 * 60 * 1000,  // 6 ชั่วโมง
+    'MN1': 12 * 60 * 60 * 1000, // 12 ชั่วโมง
+};
+const DEFAULT_CACHE_TTL = 10 * 60 * 1000; // 10 นาที (default)
+const MAX_CACHE_SIZE = 500; // จำกัดจำนวน entries ป้องกัน memory leak
+
+// analysisCache: Map<cacheKey, { data, createdAt, expiresAt, hitCount, model }>
+const analysisCache = new Map();
+
+// inflightRequests: Map<cacheKey, Promise> — request coalescing
+// ถ้ามี request ซ้ำขณะ AI กำลังประมวลผล → รอ promise เดียวกัน ไม่ยิงซ้ำ
+const inflightRequests = new Map();
+
+// Cache stats
+let cacheStats = { hits: 0, misses: 0, coalesced: 0, evictions: 0 };
+
+function getCacheKey(symbol, timeframe, model) {
+    return `${symbol}:${timeframe}:${model || 'auto'}`;
+}
+
+function getCacheTTL(timeframe) {
+    return CACHE_TTL[timeframe] || DEFAULT_CACHE_TTL;
+}
+
+function getCachedResult(key) {
+    const entry = analysisCache.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+        analysisCache.delete(key);
+        return null;
+    }
+    entry.hitCount++;
+    cacheStats.hits++;
+    return entry;
+}
+
+function setCachedResult(key, data, timeframe, model) {
+    // Evict oldest if cache full
+    if (analysisCache.size >= MAX_CACHE_SIZE) {
+        const oldestKey = analysisCache.keys().next().value;
+        analysisCache.delete(oldestKey);
+        cacheStats.evictions++;
+    }
+    const ttl = getCacheTTL(timeframe);
+    analysisCache.set(key, {
+        data,
+        model,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + ttl,
+        ttl,
+        hitCount: 0
+    });
+}
+
+// Cleanup expired entries ทุก 5 นาที
+setInterval(() => {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [key, entry] of analysisCache) {
+        if (now > entry.expiresAt) {
+            analysisCache.delete(key);
+            cleaned++;
+        }
+    }
+    if (cleaned > 0) console.log(`  Cache cleanup: removed ${cleaned} expired entries`);
+}, 5 * 60 * 1000);
+
 // ===== AI Providers =====
 // Hardcoded fallback list (ใช้เมื่อ fetch dynamic ล้มเหลว)
 const FALLBACK_PROVIDERS = [
@@ -184,7 +261,22 @@ async function askAI(systemPrompt, userPrompt, preferredModel) {
 
 // ===== Health check =====
 app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', providers: AI_PROVIDERS.length, timestamp: new Date().toISOString() });
+    res.json({
+        status: 'ok',
+        providers: AI_PROVIDERS.length,
+        cache: {
+            entries: analysisCache.size,
+            max: MAX_CACHE_SIZE,
+            hits: cacheStats.hits,
+            misses: cacheStats.misses,
+            coalesced: cacheStats.coalesced,
+            evictions: cacheStats.evictions,
+            hit_rate: (cacheStats.hits + cacheStats.misses) > 0
+                ? ((cacheStats.hits / (cacheStats.hits + cacheStats.misses)) * 100).toFixed(1) + '%'
+                : '0%'
+        },
+        timestamp: new Date().toISOString()
+    });
 });
 
 // ===== List available models =====
@@ -278,7 +370,102 @@ app.get('/models/mqh', (_req, res) => {
     res.send(mqh);
 });
 
-// ===== Main analyze endpoint =====
+// ===== Cache management endpoints =====
+
+// ดูสถานะ cache ทั้งหมด
+app.get('/cache', (req, res) => {
+    if (!isValidApiKey(req.headers['x-api-key'])) return res.status(401).json({ success: false, message: "Unauthorized" });
+    const now = Date.now();
+    const entries = [];
+    for (const [key, entry] of analysisCache) {
+        const remaining = Math.max(0, entry.expiresAt - now);
+        entries.push({
+            key,
+            model: entry.model,
+            hits: entry.hitCount,
+            created: new Date(entry.createdAt).toISOString(),
+            expires_in: Math.round(remaining / 1000) + 's',
+            expired: remaining <= 0
+        });
+    }
+    res.json({
+        total: analysisCache.size,
+        max: MAX_CACHE_SIZE,
+        inflight: inflightRequests.size,
+        stats: { ...cacheStats },
+        entries
+    });
+});
+
+// ล้าง cache ทั้งหมด หรือเฉพาะ symbol
+app.delete('/cache', (req, res) => {
+    if (!isValidApiKey(req.headers['x-api-key'])) return res.status(401).json({ success: false, message: "Unauthorized" });
+    const symbol = req.query.symbol;
+    let cleared = 0;
+    if (symbol) {
+        for (const key of analysisCache.keys()) {
+            if (key.startsWith(symbol + ':')) {
+                analysisCache.delete(key);
+                cleared++;
+            }
+        }
+    } else {
+        cleared = analysisCache.size;
+        analysisCache.clear();
+    }
+    res.json({ success: true, cleared });
+});
+
+// ===== Core analysis function (shared by /analyze and cache) =====
+async function performAnalysis(d) {
+    const candles = (d.candles || []).map((c, i) =>
+        `${i}:${c.t}|${c.o}/${c.h}/${c.l}/${c.c}|v${c.v}`
+    ).join('; ');
+
+    const positions = (d.positions || []).length > 0
+        ? (d.positions || []).map(p =>
+            `#${p.ticket} ${p.type} ${p.lots}L@${p.open_price} SL${p.sl} TP${p.tp} PnL${p.profit}`
+        ).join('; ')
+        : 'none';
+
+    const prompt = `Analyze ${d.symbol} ${d.timeframe} at ${d.server_time}:
+Price:${d.bid}/${d.ask} Spd:${d.spread} DayOpen:${d.day_open} Chg:${d.day_change}(${d.day_change_pct}%)
+Trend:${d.trend} MA:20=${d.ma20},50=${d.ma50},200=${d.ma200}
+RSI:${d.rsi} MACD:${d.macd_main}/${d.macd_signal}/${d.macd_histogram} Stoch:${d.stoch_k}/${d.stoch_d}
+ATR:${d.atr} BB:${d.bb_upper}/${d.bb_middle}/${d.bb_lower}
+S/R:H${d.recent_high} L${d.recent_low}
+Acct:Bal${d.account_balance} Eq${d.account_equity} FM${d.free_margin}
+Pos:${positions}
+Candles(O/H/L/C):${candles}
+Reply JSON:{decision:BUY/SELL/HOLD,confidence:1-100,entry_price,stop_loss,take_profit,reason:"short",risk_level:LOW/MEDIUM/HIGH,key_levels:{support,resistance}}`;
+
+    const systemPrompt = "Expert trading analyst. Reply valid JSON only, no markdown.";
+
+    // Sanitize preferred_model
+    const preferredModel = (d.preferred_model || 'auto').replace(/[^a-zA-Z0-9\-_.\/]/g, '');
+
+    const result = await askAI(systemPrompt, prompt, preferredModel);
+
+    // Parse JSON from response
+    let parsed = null;
+    try {
+        const text = typeof result.content === 'string' ? result.content : JSON.stringify(result.content);
+        const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+        parsed = JSON.parse(cleaned);
+    } catch (_e) {
+        parsed = null;
+    }
+
+    return {
+        success: true,
+        ai_analysis: parsed || result.content,
+        used_model: result.model,
+        raw: typeof result.content === 'string' ? result.content : JSON.stringify(result.content),
+        analyzed_at: new Date().toISOString()
+    };
+}
+
+// ===== Main analyze endpoint (with cache + request coalescing) =====
 app.post('/analyze', analyzeLimiter, async (req, res) => {
     if (!isValidApiKey(req.headers['x-api-key'])) {
         return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -292,55 +479,57 @@ app.post('/analyze', analyzeLimiter, async (req, res) => {
             return res.status(400).json({ success: false, message: 'Missing required fields: symbol, timeframe' });
         }
 
-        // ===== สร้าง prompt แบบประหยัด token =====
-        const candles = (d.candles || []).map((c, i) =>
-            `${i}:${c.t}|${c.o}/${c.h}/${c.l}/${c.c}|v${c.v}`
-        ).join('; ');
-
-        const positions = (d.positions || []).length > 0
-            ? (d.positions || []).map(p =>
-                `#${p.ticket} ${p.type} ${p.lots}L@${p.open_price} SL${p.sl} TP${p.tp} PnL${p.profit}`
-            ).join('; ')
-            : 'none';
-
-        const prompt = `Analyze ${d.symbol} ${d.timeframe} at ${d.server_time}:
-Price:${d.bid}/${d.ask} Spd:${d.spread} DayOpen:${d.day_open} Chg:${d.day_change}(${d.day_change_pct}%)
-Trend:${d.trend} MA:20=${d.ma20},50=${d.ma50},200=${d.ma200}
-RSI:${d.rsi} MACD:${d.macd_main}/${d.macd_signal}/${d.macd_histogram} Stoch:${d.stoch_k}/${d.stoch_d}
-ATR:${d.atr} BB:${d.bb_upper}/${d.bb_middle}/${d.bb_lower}
-S/R:H${d.recent_high} L${d.recent_low}
-Acct:Bal${d.account_balance} Eq${d.account_equity} FM${d.free_margin}
-Pos:${positions}
-Candles(O/H/L/C):${candles}
-Reply JSON:{decision:BUY/SELL/HOLD,confidence:1-100,entry_price,stop_loss,take_profit,reason:"short",risk_level:LOW/MEDIUM/HIGH,key_levels:{support,resistance}}`;
-
-        const systemPrompt = "Expert trading analyst. Reply valid JSON only, no markdown.";
-
-        // Sanitize preferred_model (alphanumeric, dash, dot, slash only)
         const preferredModel = (d.preferred_model || 'auto').replace(/[^a-zA-Z0-9\-_.\/]/g, '');
+        const cacheKey = getCacheKey(d.symbol, d.timeframe, preferredModel);
 
-        const result = await askAI(systemPrompt, prompt, preferredModel);
-
-        // พยายาม parse JSON จาก response
-        let parsed = null;
-        try {
-            // ลอง parse ตรงๆ ก่อน
-            const text = typeof result.content === 'string' ? result.content : JSON.stringify(result.content);
-            // ตัด markdown code block ถ้ามี
-            const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-            parsed = JSON.parse(cleaned);
-        } catch (_e) {
-            // ถ้า parse ไม่ได้ ส่ง raw text กลับ
-            parsed = null;
+        // ===== 1) Check cache =====
+        // ข้าม cache ถ้า client ส่ง no_cache=true
+        if (!d.no_cache) {
+            const cached = getCachedResult(cacheKey);
+            if (cached) {
+                console.log(`  [CACHE HIT] ${cacheKey} (hits: ${cached.hitCount})`);
+                const ttlRemaining = Math.round((cached.expiresAt - Date.now()) / 1000);
+                return res.json({
+                    ...cached.data,
+                    cached: true,
+                    cache_ttl_remaining: ttlRemaining
+                });
+            }
         }
 
-        res.json({
-            success: true,
-            ai_analysis: parsed || result.content,
-            used_model: result.model,
-            raw: typeof result.content === 'string' ? result.content : JSON.stringify(result.content),
-            analyzed_at: new Date().toISOString()
-        });
+        // ===== 2) Request coalescing — ถ้ามี request เดียวกันกำลังรอ AI อยู่ ให้รอ promise เดียวกัน =====
+        if (inflightRequests.has(cacheKey)) {
+            console.log(`  [COALESCED] ${cacheKey} — waiting for inflight request`);
+            cacheStats.coalesced++;
+            try {
+                const data = await inflightRequests.get(cacheKey);
+                return res.json({ ...data, cached: true, coalesced: true });
+            } catch (error) {
+                // inflight failed — ตกลงไป create ใหม่ข้างล่าง
+            }
+        }
+
+        // ===== 3) Fresh AI call =====
+        cacheStats.misses++;
+        console.log(`  [CACHE MISS] ${cacheKey} — calling AI...`);
+
+        // สร้าง promise แล้วเก็บใน inflight map
+        const analysisPromise = performAnalysis(d);
+        inflightRequests.set(cacheKey, analysisPromise);
+
+        try {
+            const data = await analysisPromise;
+
+            // บันทึก cache (เฉพาะ success + parse ได้)
+            if (data.success && data.ai_analysis && typeof data.ai_analysis === 'object') {
+                setCachedResult(cacheKey, data, d.timeframe, data.used_model);
+                console.log(`  [CACHED] ${cacheKey} — TTL ${getCacheTTL(d.timeframe) / 1000}s`);
+            }
+
+            res.json({ ...data, cached: false });
+        } finally {
+            inflightRequests.delete(cacheKey);
+        }
 
     } catch (error) {
         console.error("Analysis error:", error.message);
