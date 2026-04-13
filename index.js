@@ -437,9 +437,9 @@ S/R:H${d.recent_high} L${d.recent_low}
 Acct:Bal${d.account_balance} Eq${d.account_equity} FM${d.free_margin}
 Pos:${positions}
 Candles(O/H/L/C):${candles}
-Reply JSON:{decision:BUY/SELL/HOLD,confidence:1-100,entry_price,stop_loss,take_profit,reason:"short",risk_level:LOW/MEDIUM/HIGH,key_levels:{support,resistance}}`;
+Reply JSON:{decision:BUY/SELL/HOLD,confidence:1-100,entry_price,stop_loss,take_profit,reason:"max 180 chars",risk_level:LOW/MEDIUM/HIGH,key_levels:{support,resistance}}`;
 
-    const systemPrompt = "Expert trading analyst. Reply valid JSON only, no markdown.";
+    const systemPrompt = "Expert trading analyst. Reply valid JSON only, no markdown. Keep reason under 180 characters.";
 
     // Sanitize preferred_model
     const preferredModel = (d.preferred_model || 'auto').replace(/[^a-zA-Z0-9\-_.\/]/g, '');
