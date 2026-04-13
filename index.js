@@ -337,7 +337,7 @@ Reply JSON:{decision:BUY/SELL/HOLD,confidence:1-100,entry_price,stop_loss,take_p
         res.json({
             success: true,
             ai_analysis: parsed || result.content,
-            used_model: `${result.endpoint}/${result.model}`,
+            used_model: result.model,
             raw: typeof result.content === 'string' ? result.content : JSON.stringify(result.content),
             analyzed_at: new Date().toISOString()
         });
