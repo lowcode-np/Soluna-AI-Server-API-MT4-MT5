@@ -126,11 +126,13 @@ setInterval(() => {
 // ===== AI Providers =====
 // Hardcoded fallback list (ใช้เมื่อ fetch dynamic ล้มเหลว)
 const FALLBACK_PROVIDERS = [
-    { url: 'https://text.pollinations.ai/openai', model: 'openai',    name: 'pollinations' },
-    { url: 'https://text.pollinations.ai/openai', model: 'deepseek',  name: 'pollinations' },
-    { url: 'https://text.pollinations.ai/openai', model: 'gemini',    name: 'pollinations' },
-    { url: 'https://text.pollinations.ai/openai', model: 'claude',    name: 'pollinations' },
-    { url: 'https://text.pollinations.ai/openai', model: 'grok',      name: 'pollinations' },
+    { url: 'https://text.pollinations.ai/openai', model: 'openai',       name: 'pollinations' },
+    { url: 'https://text.pollinations.ai/openai', model: 'openai-fast',  name: 'pollinations' },
+    { url: 'https://text.pollinations.ai/openai', model: 'deepseek',     name: 'pollinations' },
+    { url: 'https://text.pollinations.ai/openai', model: 'gemini-fast',  name: 'pollinations' },
+    { url: 'https://text.pollinations.ai/openai', model: 'claude-fast',  name: 'pollinations' },
+    { url: 'https://text.pollinations.ai/openai', model: 'grok',         name: 'pollinations' },
+    { url: 'https://text.pollinations.ai/openai', model: 'mistral',      name: 'pollinations' },
     { url: 'https://api.deepinfra.com/v1/openai/chat/completions', model: 'deepseek-ai/DeepSeek-V3.2', name: 'deepinfra' },
     { url: 'https://api.deepinfra.com/v1/openai/chat/completions', model: 'Qwen/Qwen3.5-27B',          name: 'deepinfra' },
 ];
@@ -148,8 +150,20 @@ function computeModelHash() {
     return crypto.createHash('md5').update(modelStr).digest('hex');
 }
 
-// Audio/image/non-text models to exclude from Pollinations
-const POLL_EXCLUDE = new Set(['openai-audio', 'openai-audio-large', 'midijourney', 'midijourney-large', 'qwen-vision', 'qwen-safety', 'polly']);
+// Models to exclude — audio/image/specialized + heavy reasoning (slow, timeout, rate-limited)
+const POLL_EXCLUDE = new Set([
+    'openai-audio', 'openai-audio-large',        // Audio models
+    'midijourney', 'midijourney-large',          // Music models
+    'qwen-vision', 'qwen-safety',                // Vision/Safety models
+    'polly',                                     // Pollinations assistant
+    // Heavy reasoning models (slow, expensive, prone to timeout/rate-limit)
+    'openai-large',                              // GPT-5.4 reasoning
+    'grok-large',                                // Grok reasoning
+    'perplexity-reasoning',                      // Reasoning + search
+    'kimi',                                      // Heavy CoT reasoning
+    'qwen-large',                                // 396B MoE — very heavy
+    'gemini-search',                             // Search-oriented, not for trading
+]);
 
 async function fetchProviders() {
     const providers = [];
@@ -161,6 +175,8 @@ async function fetchProviders() {
             for (const m of models) {
                 const name = m.name || m;
                 if (POLL_EXCLUDE.has(name)) continue;
+                if (m.paid_only) continue;       // paid-only models get rate-limited on free tier
+                if (m.is_specialized) continue;   // specialized models (music, safety, etc.)
                 providers.push({ url: 'https://text.pollinations.ai/openai', model: name, name: 'pollinations' });
             }
             console.log(`  Pollinations: ${providers.length} models loaded`);
@@ -175,6 +191,7 @@ async function fetchProviders() {
             const data = await resp.json();
             for (const m of data) {
                 if (m.type !== 'text-generation') continue;
+                if (m.tags && m.tags.includes('no-free-anon')) continue; // requires paid account
                 providers.push({ url: 'https://api.deepinfra.com/v1/openai/chat/completions', model: m.model_name, name: 'deepinfra' });
             }
             console.log(`  DeepInfra: ${providers.length - diStart} models loaded`);
@@ -199,6 +216,8 @@ async function fetchProviders() {
 
 // ===== AI Provider (with auto-fallback) =====
 
+const MAX_FALLBACK_ATTEMPTS = 5; // จำกัดจำนวน model ที่ลอง fallback
+
 async function askAI(systemPrompt, userPrompt, preferredModel) {
     let providers = [...AI_PROVIDERS];
     if (preferredModel && preferredModel !== 'auto') {
@@ -212,15 +231,23 @@ async function askAI(systemPrompt, userPrompt, preferredModel) {
         const rest = providers.filter(p => !preferredSet.has(p));
         providers = [...preferred, ...rest];
         if (preferred.length > 0) {
-            console.log(`  -> Preferred: ${preferredModel} (${preferred.length} match across ${[...new Set(preferred.map(p => p.name))].join('+')})`);
+            console.log(`  -> Preferred: ${preferredModel} (${preferred.length} match across ${[...new Set(preferred.map(p => p.name))].join('+')})`)
         } else {
             console.log(`  -> Model "${preferredModel}" not in current list, trying anyway via Pollinations`);
-            // ถ้า model ไม่อยู่ใน list → inject เป็น Pollinations ลอง (รองรับ model ใหม่)
             providers.unshift({ url: 'https://text.pollinations.ai/openai', model: preferredModel, name: 'pollinations' });
         }
     }
+    // จำกัด fallback ไม่ให้ลองเกิน MAX_FALLBACK_ATTEMPTS ตัว
+    providers = providers.slice(0, MAX_FALLBACK_ATTEMPTS);
+
     const errors = [];
+    const rateLimitedProviders = new Set(); // track provider ที่โดน rate limit
     for (const provider of providers) {
+        // ข้าม provider ที่โดน rate limit แล้ว (เช่น Pollinations โดน 429 → ข้ามทุก Pollinations model)
+        if (rateLimitedProviders.has(provider.name)) {
+            console.log(`  -> Skipped: ${provider.name}/${provider.model} (provider rate-limited)`);
+            continue;
+        }
         try {
             const resp = await fetch(provider.url, {
                 method: 'POST',
@@ -236,10 +263,11 @@ async function askAI(systemPrompt, userPrompt, preferredModel) {
             });
             if (!resp.ok) {
                 const errText = await resp.text();
-                // หยุด fallback ทันทีเมื่อเจอ rate limit (429)
                 if (resp.status === 429) {
-                    console.log(`  -> Rate limited (429) - stopping fallback`);
-                    throw new Error(`Rate limited. Try again in 1 minute.`);
+                    console.log(`  -> Rate limited (429) on ${provider.name} - skipping this provider`);
+                    rateLimitedProviders.add(provider.name);
+                    errors.push(`${provider.model}: Rate limited`);
+                    continue; // ลอง provider อื่นต่อ (เช่น DeepInfra)
                 }
                 throw new Error(`HTTP ${resp.status}: ${errText.substring(0, 100)}`);
             }
@@ -252,8 +280,6 @@ async function askAI(systemPrompt, userPrompt, preferredModel) {
         } catch (e) {
             console.log(`  -> Failed: ${provider.name}/${provider.model} - ${e.message.substring(0, 60)}`);
             errors.push(`${provider.model}: ${e.message}`);
-            // หยุดทันทีถ้า rate limit — ลองต่อไปก็โดนเหมือนกัน
-            if (e.message.includes('Rate limited')) break;
         }
     }
     throw new Error(`All providers failed:\n${errors.join('\n')}`);
@@ -345,11 +371,10 @@ app.get('/models/mqh', (_req, res) => {
     mqh += `enum ENUM_AI_MODEL\n{\n`;
     mqh += `   MODEL_AUTO   = 0,  // Auto\n`;
     entries.forEach((e, i) => {
-        const comma = (i < entries.length - 1) ? ',' : ',';
         const label = e.provider === 'deepinfra' ? `DI: ${e.model}` : e.model;
         mqh += `   ${e.enumName.padEnd(40)} = ${(i + 1).toString().padStart(3)}, // ${label}\n`;
     });
-    mqh += `   MODEL_CUSTOM = 999  // Custom (ระบุใน CustomModelName)\n`;
+    mqh += `   MODEL_CUSTOM = 999  // Custom\n`;
     mqh += `};\n\n`;
 
     // ModelToString function
@@ -537,8 +562,8 @@ app.post('/analyze', analyzeLimiter, async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT;
-app.listen(PORT, async () => {
+const PORT = process.env.PORT || 3000;
+const server = app.listen(PORT, async () => {
     console.log(`SolunaAI Trading API running on port ${PORT}`);
     console.log('Fetching model lists...');
     await fetchProviders();
@@ -551,7 +576,18 @@ app.listen(PORT, async () => {
         console.log('Auto-refreshing model lists...');
         await fetchProviders();
         console.log(`Refreshed: ${AI_PROVIDERS.length} providers`);
-    }, 24 * 60 * 60 * 1000);
+    }, 6 * 60 * 60 * 1000);
+});
+
+// Graceful shutdown — ปิด server อย่างเรียบร้อยเมื่อ deploy ใหม่
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully...');
+    server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+    });
+    // Force close after 10s
+    setTimeout(() => process.exit(1), 10000);
 });
 
 module.exports = app;
