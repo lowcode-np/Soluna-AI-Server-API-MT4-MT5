@@ -1,4 +1,13 @@
 ﻿//+------------------------------------------------------------------+
+//| Project: AI Trading Analysis for MetaTrader                      |
+//| Author:  Lowcode (https://t.me/Iowcode)                         |
+//| License: CC BY-NC-SA 4.0                                        |
+//|                                                                  |
+//| Commercial use of this software is strictly prohibited.          |
+//| If you remix, transform, or build upon the material, you must    |
+//| distribute your contributions under the same license.            |
+//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //| AI_Models.mqh - AI Model Definitions                             |
 //| Updated: 2026-04-14                                              |
 //| Excluded: paid_only, heavy reasoning, audio, specialized models  |

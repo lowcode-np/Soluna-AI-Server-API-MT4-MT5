@@ -1,5 +1,14 @@
+﻿//+------------------------------------------------------------------+
+//| Project: AI Trading Analysis for MetaTrader                      |
+//| Author:  Lowcode (https://t.me/Iowcode)                         |
+//| License: CC BY-NC-SA 4.0                                        |
+//|                                                                  |
+//| Commercial use of this software is strictly prohibited.          |
+//| If you remix, transform, or build upon the material, you must    |
+//| distribute your contributions under the same license.            |
 //+------------------------------------------------------------------+
-//| AI_Connector.mqh — AI Trading Analysis Connector                 |
+//+------------------------------------------------------------------+
+//| AI_Connector.mqh â€” AI Trading Analysis Connector                 |
 //| WinInet.dll-based HTTP connection to AI API Server               |
 //+------------------------------------------------------------------+
 #ifndef AI_CONNECTOR_MQH
@@ -161,7 +170,7 @@ public:
    // --- Health check ---
    bool              CheckHealth(int &provider_count);
 
-   // --- Full analysis (ส่งข้อมูลเอง) ---
+   // --- Full analysis (à¸ªà¹ˆà¸‡à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¹€à¸­à¸‡) ---
    bool              Analyze(ENUM_AI_MODEL model,
                              const string symbol, const string timeframe,
                              double bid, double ask, double spread, int digits,
@@ -178,7 +187,7 @@ public:
                              const AI_Position &positions[], int pos_count,
                              AI_Result &result);
 
-   // --- Quick analysis (เก็บข้อมูลจากชาร์ตอัตโนมัติ) ---
+   // --- Quick analysis (à¹€à¸à¹‡à¸šà¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸ˆà¸²à¸à¸Šà¸²à¸£à¹Œà¸•à¸­à¸±à¸•à¹‚à¸™à¸¡à¸±à¸•à¸´) ---
    #ifdef COMPAT_MQL5
    bool              AnalyzeCurrentChart(ENUM_AI_MODEL model, int candle_count, AI_Result &result);
    #endif
@@ -630,7 +639,7 @@ bool CAI_Connector::Analyze(ENUM_AI_MODEL model,
 }
 
 //+------------------------------------------------------------------+
-//| AnalyzeCurrentChart — MQL5 Version                               |
+//| AnalyzeCurrentChart â€” MQL5 Version                               |
 //+------------------------------------------------------------------+
 #ifdef COMPAT_MQL5
 bool CAI_Connector::AnalyzeCurrentChart(ENUM_AI_MODEL model, int candle_count, AI_Result &result)
@@ -743,7 +752,7 @@ bool CAI_Connector::AnalyzeCurrentChart(ENUM_AI_MODEL model, int candle_count, A
 #endif  // COMPAT_MQL5
 
 //+------------------------------------------------------------------+
-//| AnalyzeCurrentChart — MQL4 Version                               |
+//| AnalyzeCurrentChart â€” MQL4 Version                               |
 //+------------------------------------------------------------------+
 #ifdef COMPAT_MQL4
 bool CAI_Connector::AnalyzeCurrentChart(ENUM_AI_MODEL model, int candle_count, AI_Result &result)

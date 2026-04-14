@@ -432,7 +432,14 @@ Contributions are welcome! 🎉
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)**.
+
+- **ห้ามนำไปใช้เชิงพาณิชย์** (No Commercial Use)
+- **ต้องให้เครดิตผู้สร้าง** (Attribution Required)
+- **ต้องแชร์ภายใต้ license เดียวกัน** (ShareAlike)
+
+See the [LICENSE](LICENSE) file for full details.
+Full license text: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
 
 ---
 

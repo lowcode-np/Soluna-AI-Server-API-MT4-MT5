@@ -1,3 +1,13 @@
+/*
+ * Project: AI Trading Analysis for MetaTrader
+ * Author: Lowcode (https://t.me/Iowcode)
+ * License: Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)
+ *
+ * Commercial use of this software is strictly prohibited.
+ * If you remix, transform, or build upon the material, you must distribute
+ * your contributions under the same license as the original.
+ */
+
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
@@ -360,10 +370,18 @@ app.get('/models/mqh', (_req, res) => {
 
     // Build .mqh content
     let mqh = `//+------------------------------------------------------------------+\n`;
-    mqh += `//| AI_Models.mqh — Auto-generated from server model list           |\n`;
-    mqh += `//| Generated: ${new Date().toISOString()}                          |\n`;
-    mqh += `//| Total: ${entries.length} models + Auto + Custom                 |\n`;
-    mqh += `//| DO NOT EDIT — will be overwritten by server                     |\n`;
+    mqh += `//| Project: AI Trading Analysis for MetaTrader                      |\n`;
+    mqh += `//| Author:  Lowcode (https://t.me/Iowcode)                         |\n`;
+    mqh += `//| License: CC BY-NC-SA 4.0                                        |\n`;
+    mqh += `//|                                                                  |\n`;
+    mqh += `//| Commercial use of this software is strictly prohibited.          |\n`;
+    mqh += `//| If you remix, transform, or build upon the material, you must    |\n`;
+    mqh += `//| distribute your contributions under the same license.            |\n`;
+    mqh += `//+------------------------------------------------------------------+\n`;
+    mqh += `//| AI_Models.mqh — Auto-generated from server model list            |\n`;
+    mqh += `//| Generated: ${new Date().toISOString()}                           |\n`;
+    mqh += `//| Total: ${entries.length} models + Auto + Custom                  |\n`;
+    mqh += `//| DO NOT EDIT — will be overwritten by server                      |\n`;
     mqh += `//+------------------------------------------------------------------+\n`;
     mqh += `#ifndef AI_MODELS_MQH\n#define AI_MODELS_MQH\n\n`;
 
