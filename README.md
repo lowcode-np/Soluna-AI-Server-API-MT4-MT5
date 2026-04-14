@@ -1,426 +1,468 @@
-# AI Trading Analysis for MetaTrader
-
-AI Analysis Library + API Server สำหรับ MetaTrader 4/5  
-วิเคราะห์ตลาดด้วย AI 47+ models ฟรี ไม่มีค่าใช้จ่าย
+<div align="center">
 
 ```
-┌────────────────────────────┐
-│   MetaTrader 4/5 EA        │
-│   (Your EA or Example EA)  │
-│   #include AI_Connector    │
-└────────┬───────────────────┘
-         │ WinInet.dll POST JSON
-         ▼
-┌────────────────────────────┐
-│   Node.js API Server       │
-│   Express + Auth + Helmet  │
-│   Cache + Rate Limiting    │
-└────────┬───────────────────┘
-         │ fetch (OpenAI-compatible)
-         ▼
-┌────────────────────────────┐
-│   AI Providers (Free)      │
-│   Pollinations: 26+ models │
-│   DeepInfra: 17+ models    │
-│   Auto-fallback chain      │
-└────────────────────────────┘
+ █████╗ ██╗    ████████╗██████╗  █████╗ ██████╗ ██╗███╗   ██╗ ██████╗
+██╔══██╗██║    ╚══██╔══╝██╔══██╗██╔══██╗██╔══██╗██║████╗  ██║██╔════╝
+ ███████║██║       ██║   ██████╔╝███████║██║  ██║██║██╔██╗ ██║██║  ███╗
+ ██╔══██║██║       ██║   ██╔══██╗██╔══██║██║  ██║██║██║╚██╗██║██║   ██║
+ ██║  ██║██║       ██║   ██║  ██║██║  ██║██████╔╝██║██║ ╚████║╚██████╔╝
+╚═╝  ╚═╝╚═╝       ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝╚═╝  ╚═══╝ ╚═════╝
+```
+
+# 🤖 AI Trading Analysis for MetaTrader
+
+### ระบบวิเคราะห์การเทรดด้วย AI สำหรับ MetaTrader 4/5
+
+**34+ AI Models | Free Forever | Auto-Fallback | MQL4/5 Compatible**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org)
+[![MetaTrader](https://img.shields.io/badge/MetaTrader-4%20%7C%205-blue.svg)](https://www.metatrader4.com)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
+
+[📚 Documentation](#documentation) • [🚀 Quick Start](#quick-start) • [🎯 Features](#features) • [💬 Telegram](https://t.me/Iowcode)
+
+</div>
+
+---
+
+## 🎯 Overview
+
+**AI Trading Analysis** เป็นระบบวิเคราะห์การเทรดด้วย AI ที่ออกแบบมาสำหรับ MetaTrader 4/5 โดยเฉพาะ รองรับ **34+ AI Models** จาก Pollinations และ DeepInfra **ฟรี 100%** พร้อมระบบ auto-fallback และ caching ที่ชาญฉลาด
+
+```
+┌─────────────────────────────┐
+│   MetaTrader 4/5 EA         │
+│   #include AI_Connector     │
+│   ┌───────────────────────┐ │
+│   │ Your Trading Logic    │ │
+│   └───────────────────────┘ │
+└──────────┬──────────────────┘
+           │ WinInet.dll (HTTP POST)
+           ▼
+┌─────────────────────────────┐
+│   Node.js API Server        │
+│   • Express + Helmet        │
+│   • Rate Limiting           │
+│   • Smart Cache System      │
+│   • Request Coalescing      │
+└──────────┬──────────────────┘
+           │ OpenAI-Compatible API
+           ▼
+┌─────────────────────────────┐
+│   Free AI Providers         │
+│   ├─ Pollinations (26+)     │
+│   └─ DeepInfra (17+)        │
+│                             │
+│   Auto-Fallback Chain       │
+└─────────────────────────────┘
 ```
 
 ---
 
-## โครงสร้างไฟล์
+## ✨ Features
 
-```
-├── index.js              # API Server หลัก
-├── package.json          # Dependencies (Express, Helmet, etc.)
-├── .env                  # AI_API_KEY, PORT, BASE_URL
-├── test.js               # API test script
-└── MQL/
-    ├── AI_Connector.mqh  # AI Connector Class (WinInet.dll, MQL4+MQL5)
-    ├── AI_Models.mqh     # ENUM_AI_MODEL + ModelToString (auto-gen จาก server)
-    ├── Example_EA.mq4    # ตัวอย่าง EA สำหรับ MQL4 พร้อม Dashboard
-    └── Example_EA.mq5    # ตัวอย่าง EA สำหรับ MQL5 พร้อม Dashboard
-```
+### 🚀 Core Features
+- ✅ **34+ AI Models** - GPT-4, Claude, Gemini, DeepSeek และอีกมากมาย
+- ✅ **100% Free** - ใช้ Free tier จาก Pollinations + DeepInfra
+- ✅ **Auto-Fallback** - หาก model หนึ่งล้มเหลว จะลองถัดไปอัตโนมัติ
+- ✅ **Smart Caching** - ลด API calls ด้วย TTL ที่ปรับตาม timeframe
+- ✅ **Request Coalescing** - รวม duplicate requests เป็นหนึ่งเดียว
+- ✅ **MQL4 + MQL5** - รองรับทั้งสองเวอร์ชัน
+- ✅ **Dashboard UI** - หน้า panel สวยงามแบบ AXER style
+- ✅ **Security First** - Helmet, Rate Limiting, Timing-safe Auth
+
+### 🛡️ Security & Performance
+- 🔒 **Helmet.js** - Protection headers
+- ⚡ **Rate Limiting** - 30 req/min per endpoint
+- 🎯 **Request Timeout** - 30s per AI call
+- 📊 **Smart Model Matching** - Exact, Partial, Custom
+- 🔄 **Auto Model Sync** - อัปเดต model list อัตโนมัติ
+- 💾 **Persistent Cache** - แคชผลลัพธ์ตาม timeframe
 
 ---
 
-## Part 1: API Server
+## 📦 Installation
 
-### ติดตั้ง
+### Prerequisites
+- Node.js 18+ 
+- MetaTrader 4 or 5
+- Git
 
+### 1️⃣ Clone Repository
 ```bash
 git clone https://github.com/lowcode-np/API-EA-AI.git
 cd API-EA-AI
+```
+
+### 2️⃣ Install Dependencies
+```bash
 npm install
 ```
 
-### ตั้งค่า `.env`
+### 3️⃣ Configure Environment
+สร้างไฟล์ `.env` หรือตั้งค่าผ่าน hosting platform:
 
 ```env
-AI_API_KEY=your-secret-api-key-here
+AI_API_KEY=your_secret_key_here
 PORT=8000
-BASE_URL=https://axer-ai.onrender.com
+BASE_URL=https://your-domain.com
 ```
 
-| ตัวแปร | คำอธิบาย |
-|--------|----------|
-| `AI_API_KEY` | API key สำหรับ auth ระหว่าง EA ↔ Server |
-| `PORT` | พอร์ตที่ server listen (default: 8000) |
-| `BASE_URL` | URL สำหรับ `/models/check` download link |
-
-### รัน Server
-
+### 4️⃣ Run Server
 ```bash
-npm start        # Production
-npm run dev      # Dev (auto-reload)
+# Production
+npm start
+
+# Development (auto-reload)
+npm run dev
 ```
 
-### Security Features
-
-- **Helmet** — Security headers (X-Content-Type-Options, X-Frame-Options, etc.)
-- **Rate Limiting** — 30 req/min ต่อ IP สำหรับ `/analyze`, 120 req/min global
-- **Timing-safe auth** — ป้องกัน timing attack บน API key
-- **Input validation** — ตรวจ required fields ก่อนประมวลผล
-- **Request timeout** — 30s timeout ต่อ AI provider call
-- **Sanitized model name** — ป้องกัน log injection
+Server จะรันที่ `http://localhost:8000` 🎉
 
 ---
+
+## 🚀 Quick Start
+
+### For MetaTrader Users
+
+1. **Copy Files** ไปยัง MetaTrader directory:
+   ```
+   📁 MQL/
+   ├── AI_Connector.mqh    → Include/
+   ├── AI_Models.mqh       → Include/
+   ├── Example_EA.mq4      → Experts/
+   └── Example_EA.mq5      → Experts/
+   ```
+
+2. **Compile EA** ใน MetaEditor (F7)
+
+3. **Enable DLL imports**:
+   - Tools → Options → Expert Advisors
+   - ✅ Allow DLL imports
+
+4. **Drag EA to Chart** และตั้งค่า:
+   - `InpApiUrl`: URL ของ API Server
+   - `InpApiKey`: API Key ที่ตั้งไว้
+   - `InpModel`: เลือก AI Model
+
+5. **Start Trading!** 🎯
+
+---
+
+## 📚 Documentation
 
 ### API Endpoints
 
 #### `GET /health`
-
-Health check (ไม่ต้อง auth)
+Health check endpoint (ไม่ต้อง authentication)
 
 ```json
-{ "status": "ok", "providers": 47, "timestamp": "2026-04-11T12:00:00.000Z" }
+{
+  "status": "ok",
+  "providers": 47,
+  "timestamp": "2026-04-14T12:00:00.000Z"
+}
 ```
 
 #### `GET /models`
-
-แสดง model ทั้งหมดที่ใช้ได้ (ไม่ต้อง auth)
+ดูรายการ AI models ทั้งหมด
 
 ```json
 {
   "count": 47,
   "models": [
     { "model": "openai", "provider": "pollinations" },
+    { "model": "claude-fast", "provider": "pollinations" },
     { "model": "Qwen/Qwen3.5-27B", "provider": "deepinfra" }
   ]
 }
 ```
 
 #### `POST /analyze`
+วิเคราะห์ตลาดด้วย AI (ต้อง API key)
 
-วิเคราะห์ตลาดด้วย AI (ต้อง auth, rate limited 30/min)
-
-**Headers:**
-
-| Key | Value |
-|-----|-------|
-| `Content-Type` | `application/json` |
-| `x-api-key` | ค่าเดียวกับ `AI_API_KEY` ใน `.env` |
+**Request:**
+```bash
+curl -X POST https://your-api.com/analyze \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your_api_key" \
+  -d '{
+    "symbol": "EURUSD",
+    "timeframe": "H1",
+    "model": "openai",
+    "candles": 10
+  }'
+```
 
 **Response:**
-
 ```json
 {
   "success": true,
   "ai_analysis": {
     "decision": "BUY",
     "confidence": 75,
-    "entry_price": 2345.50,
-    "stop_loss": 2340.00,
-    "take_profit": 2355.00,
+    "entry_price": 1.0850,
+    "stop_loss": 1.0820,
+    "take_profit": 1.0920,
     "reason": "RSI oversold with MACD bullish crossover",
     "risk_level": "MEDIUM",
-    "key_levels": { "support": 2338.00, "resistance": 2360.00 }
+    "key_levels": {
+      "support": 1.0800,
+      "resistance": 1.0950
+    }
   },
   "used_model": "openai",
-  "analyzed_at": "2026-04-11T12:00:05.000Z",
+  "analyzed_at": "2026-04-14T12:00:05.000Z",
   "cached": false
 }
 ```
 
-| Status | ความหมาย |
-|--------|----------|
-| 200 | สำเร็จ (อาจเป็น cached หรือ fresh) |
-| 400 | ขาด field ที่จำเป็น (symbol, timeframe) |
-| 401 | API key ไม่ถูกต้อง |
-| 429 | เกิน rate limit |
-| 500 | AI providers ทั้งหมดล้มเหลว |
+### Response Codes
+
+| Code | Description |
+|------|-------------|
+| 200 | ✅ Success |
+| 400 | ❌ Missing required fields |
+| 401 | 🔒 Invalid API key |
+| 429 | ⏱️ Rate limit exceeded |
+| 500 | 💥 All AI providers failed |
 
 ---
 
-### Cache System
+## 🎨 Dashboard Preview
 
-Server มี built-in cache + request coalescing:
-
-| Timeframe | Cache TTL |
-|-----------|-----------|
-| M1 | 45 วินาที |
-| M5 | 2 นาที |
-| M15 | 5 นาที |
-| M30 | 10 นาที |
-| H1 | 20 นาที |
-| H4 | 45 นาที |
-| D1 | 2 ชั่วโมง |
-
-- **Request coalescing** — ถ้ามี request ซ้ำขณะ AI กำลังประมวลผล → รอ promise เดียวกัน ไม่ยิงซ้ำ
-- ส่ง `no_cache: true` ใน body เพื่อข้าม cache
-
----
-
-### Developer Endpoints
-
-#### `GET /models/check?hash=<hash>`
-
-ตรวจสอบว่า model list มีอัปเดตหรือไม่
-
-```json
-{
-  "version": 2,
-  "hash": "c412e9a09df1ad02504119c89b215b55",
-  "count": 47,
-  "outdated": true,
-  "download_url": "https://axer-ai.onrender.com/models/mqh"
-}
+```
+╔═══════════════════════════════════════════════╗
+║ 🤖 AI Trading Analysis ──────────── v1.0  [X] ║
+╠═══════════════════════════════════════════════╣
+║                                               ║
+║  📊 SIGNAL                                    ║
+║  ▲ BULLISH                                    ║
+║  ████████████░░░░  75%                        ║
+║                                               ║
+║  ┌─ AI ANALYSIS ──────────────────────────┐  ║
+║  │ Decision: BUY       Risk: MEDIUM       │  ║
+║  │ Model: openai                          │  ║
+║  │ [FRESH]  Updated: 14:30                │  ║
+║  │ Confidence: 75%                        │  ║
+║  └────────────────────────────────────────┘  ║
+║                                               ║
+║  ┌─ KEY LEVELS ────────────────────────────┐ ║
+║  │ Entry: 1.0850      SL: 1.0820          │ ║
+║  │ TP: 1.0920                             │ ║
+║  └────────────────────────────────────────┘  ║
+║                                               ║
+║  ┌─ REASON ────────────────────────────────┐ ║
+║  │ RSI oversold with MACD bullish         │ ║
+║  │ crossover near BB lower band           │ ║
+║  └────────────────────────────────────────┘  ║
+╚═══════════════════════════════════════════════╝
 ```
 
-#### `GET /models/mqh`
-
-ดาวน์โหลดไฟล์ `AI_Models.mqh` (ENUM + ModelToString) auto-generated จาก server
-
-```bash
-curl -o AI_Models.mqh https://axer-ai.onrender.com/models/mqh
-```
-
-#### `POST /models/refresh`
-
-บังคับ refresh model list จาก providers (ต้อง auth)
-
-#### `GET /cache` / `DELETE /cache`
-
-ดูสถานะ / ล้าง cache (ต้อง auth)
-
 ---
 
-### วิธีอัปเดต Model List
+## 💡 Usage Example
 
-1. เรียก `GET /models/check` → เก็บ `hash`
-2. ครั้งถัดไป เรียก `GET /models/check?hash=<hash_เดิม>`
-3. ถ้า `outdated: true` → ดาวน์โหลด `GET /models/mqh`
-4. บันทึกทับ `AI_Models.mqh` ใน `MQL4/Include/` → Compile EA ใหม่
-
-Server auto-refresh model list จาก Pollinations + DeepInfra ทุก 24 ชม.
-
----
-
-### AI Provider System
-
-Server ดึง model list อัตโนมัติจาก:
-- **Pollinations** (`gen.pollinations.ai/text/models`) — 26+ text models
-- **DeepInfra** (`api.deepinfra.com/models/featured`) — 17+ text-generation models
-
-**Smart Matching:** เมื่อ EA ส่ง `preferred_model`:
-1. exact match → ใช้ model นั้นเลย
-2. partial match → เช่น "deepseek" จะ match "deepseek-ai/DeepSeek-V3.2"
-3. ไม่เจอ → inject เป็น Pollinations ลองส่งตรง (รองรับ model ใหม่)
-4. ล้มเหลว → fallback ไปยัง model ถัดไปตามลำดับ
-5. เจอ 429 rate limit → หยุดทันที ไม่ลองต่อ
-
----
-
-### Deploy (Render)
-
-1. Push โค้ดขึ้น GitHub
-2. สร้าง Web Service บน [render.com](https://render.com)
-3. Build Command: `npm install`
-4. Start Command: `npm start`
-5. Environment Variables: `AI_API_KEY`, `PORT`, `BASE_URL`
-
----
-
-## Part 2: MQL Library + Example EA
-
-### ไฟล์ Library
-
-| ไฟล์ | คำอธิบาย |
-|------|----------|
-| `AI_Connector.mqh` | Class `CAI_Connector` — เชื่อมต่อ AI API ผ่าน WinInet.dll รองรับ MQL4 + MQL5 |
-| `AI_Models.mqh` | `ENUM_AI_MODEL` + `ModelToString()` — auto-generated จาก server (`/models/mqh`) |
-
-### ไฟล์ Example
-
-| ไฟล์ | คำอธิบาย |
-|------|----------|
-| `Example_EA.mq4` | ตัวอย่าง MQL4 EA — AI Analysis + Dashboard Panel (AXER-style dark theme) |
-| `Example_EA.mq5` | ตัวอย่าง MQL5 EA — เหมือนกันแต่ใช้ MQL5 syntax (`_Symbol`, `_Digits`, etc.) |
-
-### ติดตั้ง
-
-1. คัดลอก `AI_Models.mqh` + `AI_Connector.mqh` ไปยัง `MQL4/Include/` (หรือ `MQL5/Include/`)
-2. คัดลอก `Example_EA.mq4` ไปยัง `MQL4/Experts/` (หรือ `.mq5` → `MQL5/Experts/`)
-3. เปิด **MetaEditor** → Compile (F7)
-4. **Tools → Options → Expert Advisors:**
-   - ✅ Allow DLL imports (ใช้ WinInet.dll สำหรับ HTTP)
-5. ลาก EA ไปวางบน Chart
-
-> **หมายเหตุ:** ไม่ต้องเพิ่ม URL ใน WebRequest whitelist — ใช้ WinInet.dll โดยตรง
-
-### Input Parameters (Example EA)
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `InpModel` | Auto | เลือก AI Model (dropdown 43+ ตัวเลือก) |
-| `CustomModelName` | (ว่าง) | ชื่อ model กำหนดเอง (ใช้กับ MODEL_CUSTOM) |
-| `InpApiKey` | (ว่าง) | API Key (ค่าเดียวกับ `AI_API_KEY` ใน `.env`) |
-| `PanelX` | 10 | ตำแหน่ง X ของ Dashboard |
-| `PanelY` | 20 | ตำแหน่ง Y ของ Dashboard |
-
-### การใช้งานใน EA ของคุณ
+### Basic Integration
 
 ```mql4
 #include <AI_Models.mqh>
 #include <AI_Connector.mqh>
 
-input ENUM_AI_MODEL InpModel   = MODEL_AUTO;
-input string        InpApiKey  = "";
+// Input Parameters
+input ENUM_AI_MODEL InpModel  = MODEL_AUTO;
+input string InpApiUrl        = "https://axer-ai.onrender.com";
+input string InpApiKey        = "";
 
+// Global AI Connector
 CAI_Connector g_ai;
 
+//+------------------------------------------------------------------+
+//| Expert initialization function                                    |
+//+------------------------------------------------------------------+
 int OnInit()
 {
-   g_ai.SetApiUrl("https://axer-ai.onrender.com");
+   // Initialize AI Connector
+   g_ai.SetApiUrl(InpApiUrl);
    g_ai.SetApiKey(InpApiKey);
+   g_ai.SetTimeout(30000);
+   
+   Print("AI Trading Analysis initialized ✓");
    return(INIT_SUCCEEDED);
 }
 
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
 void OnTick()
 {
+   // Analyze current chart
    AI_Result result;
+   
    if(g_ai.AnalyzeCurrentChart(InpModel, 10, result))
    {
       if(result.decision == AI_BUY)
-         Print("AI: BUY ", result.confidence, "% - ", result.reason);
+      {
+         Print("🟢 AI Signal: BUY");
+         Print("   Confidence: ", result.confidence, "%");
+         Print("   Entry: ", result.entry_price);
+         Print("   SL: ", result.stop_loss);
+         Print("   TP: ", result.take_profit);
+         Print("   Reason: ", result.reason);
+         
+         // Your trading logic here
+         // OrderSend(...);
+      }
       else if(result.decision == AI_SELL)
-         Print("AI: SELL ", result.confidence, "% - ", result.reason);
+      {
+         Print("🔴 AI Signal: SELL");
+         // Your trading logic here
+      }
+      else
+      {
+         Print("⚪ AI Signal: HOLD");
+      }
+   }
+   else
+   {
+      Print("❌ AI Analysis failed: ", result.error_message);
    }
 }
 ```
 
-### CAI_Connector Methods
+---
 
-| Method | คำอธิบาย |
-|--------|----------|
-| `SetApiUrl(url)` | ตั้ง URL ของ API Server |
-| `SetApiKey(key)` | ตั้ง API Key |
-| `SetCustomModel(name)` | ตั้งชื่อ model กำหนดเอง |
-| `SetTimeout(ms)` | ตั้ง timeout (default: 30000ms) |
-| `SetNoCache(bool)` | ส่ง `no_cache` ไป server |
-| `GetApiUrl()` | อ่าน URL ปัจจุบัน |
-| `CheckHealth(count)` | Health check → คืนจำนวน providers |
-| `AnalyzeCurrentChart(model, candles, result)` | วิเคราะห์จากชาร์ตปัจจุบัน (เก็บ indicators อัตโนมัติ) |
-| `Analyze(...)` | วิเคราะห์โดยส่งข้อมูลเอง (30+ fields) |
+## 🔧 Advanced Configuration
 
-### AI_Result Struct
+### Cache System
 
-| Field | Type | คำอธิบาย |
-|-------|------|----------|
-| `success` | bool | สำเร็จหรือไม่ |
-| `decision` | ENUM_AI_DECISION | AI_BUY / AI_SELL / AI_HOLD |
-| `confidence` | int | 1-100 |
-| `entry_price` | double | ราคาเข้า |
-| `stop_loss` | double | Stop Loss |
-| `take_profit` | double | Take Profit |
-| `reason` | string | เหตุผล (max 180 chars) |
-| `risk_level` | ENUM_AI_RISK | LOW / MEDIUM / HIGH |
-| `used_model` | string | ชื่อ model ที่ใช้จริง |
-| `from_cache` | bool | ผลลัพธ์จาก cache หรือ fresh |
+Cache TTL ปรับอัตโนมัติตาม timeframe:
+
+| Timeframe | Cache TTL | Use Case |
+|-----------|-----------|----------|
+| M1 | 45s | Scalping |
+| M5 | 2 min | Day Trading |
+| M15 | 5 min | Swing |
+| M30 | 10 min | Position |
+| H1 | 20 min | Daily Analysis |
+| H4 | 45 min | Swing Long |
+| D1 | 2 hours | Long-term |
+
+**Bypass Cache:**
+```mql4
+g_ai.SetNoCache(true);  // ข้าม cache ครั้งเดียว
+```
+
+### Custom Models
+
+ใช้ model ที่ยังไม่อยู่ใน enum:
+
+```mql4
+input ENUM_AI_MODEL InpModel = MODEL_CUSTOM;
+input string CustomModelName = "anthropic/claude-3.5";
+
+g_ai.SetCustomModel(CustomModelName);
+```
+
+### Model Auto-Update
+
+ตรวจสอบ model list ใหม่:
+
+```bash
+# Check for updates
+curl https://your-api.com/models/check?hash=current_hash
+
+# Download new AI_Models.mqh
+curl -o AI_Models.mqh https://your-api.com/models/mqh
+```
 
 ---
 
-## AI Model ที่รองรับ
+## 🌐 Deployment
+
+### Deploy to Render
+
+1. Push code to GitHub
+2. Create Web Service on [render.com](https://render.com)
+3. Settings:
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+   - **Environment Variables**:
+     ```
+     AI_API_KEY=your_secret_key
+     PORT=8000
+     BASE_URL=https://your-app.onrender.com
+     ```
+
+### Deploy to Railway
+
+```bash
+railway login
+railway init
+railway up
+```
+
+### Deploy to Heroku
+
+```bash
+heroku create your-app-name
+git push heroku main
+heroku config:set AI_API_KEY=your_secret_key
+```
+
+---
+
+## 📊 Supported AI Models
 
 ### Pollinations (26+ models)
-
-| กลุ่ม | Models |
-|-------|--------|
-| **OpenAI** | openai, openai-fast, openai-large |
-| **Gemini** | gemini, gemini-fast, gemini-flash-lite, gemini-large, gemini-search |
-| **Claude** | claude-fast, claude, claude-large |
-| **Grok** | grok, grok-large |
-| **Mistral** | mistral, mistral-large |
-| **Nova** | nova, nova-fast |
-| **Qwen** | qwen-large, qwen-coder, qwen-coder-large |
-| **Perplexity** | perplexity-fast, perplexity-reasoning |
-| **อื่นๆ** | deepseek, kimi, glm, minimax |
+`openai` • `openai-fast` • `deepseek` • `gemini-fast` • `claude-fast` • `grok` • `mistral` • `mistral-large` • `nova-fast` • `nova` • `glm` • `minimax` • `qwen-coder` • `qwen-coder-large` • `perplexity-fast`
 
 ### DeepInfra (17+ models)
+`deepseek-ai/DeepSeek-V3.2` • `Qwen/Qwen3.5-27B` • `Qwen/Qwen3.5-397B-A17B` • `google/gemma-4-26B-A4B-it` • `nvidia/NVIDIA-Nemotron-3-Super-120B-A12B` • `zai-org/GLM-5.1` • `stepfun-ai/Step-3.5-Flash`
 
-| กลุ่ม | Models |
-|-------|--------|
-| **Qwen 3.5** | 397B, 122B, 35B, 27B, 9B, 4B, 2B, 0.8B |
-| **Qwen 3** | Qwen3 Max, Qwen3 Max Thinking |
-| **Gemma** | Gemma 4 26B, Gemma 4 31B |
-| **Nemotron** | Nemotron 120B, Nemotron 30B |
-| **อื่นๆ** | GLM-5.1, GLM-4.7 Flash, Step 3.5 Flash |
-
-> Model list อัปเดตอัตโนมัติจาก providers — จำนวนอาจเปลี่ยน  
-> ใช้ `MODEL_CUSTOM` + `CustomModelName` สำหรับ model ที่ยังไม่อยู่ใน enum
+> 💡 Model list อัปเดตอัตโนมัติจาก providers
 
 ---
 
-## Data ที่ส่งให้ AI
+## 🤝 Contributing
 
-| หมวด | Fields |
-|------|--------|
-| **Price** | bid, ask, spread, digits |
-| **Daily** | day_open, day_change, day_change_pct |
-| **MA** | ma20, ma50, ma200 |
-| **Momentum** | rsi, macd_main/signal/histogram, stoch_k/d |
-| **Volatility** | atr, bb_upper/middle/lower |
-| **S/R** | recent_high, recent_low (50-bar) |
-| **Trend** | Auto-detect: STRONG_UP/UP/SIDEWAYS/DOWN/STRONG_DOWN |
-| **Account** | balance, equity, free_margin |
-| **Candles** | 10 แท่ง OHLCV |
-| **Positions** | ออเดอร์ที่เปิด (ticket, type, lots, SL, TP, PnL) |
+Contributions are welcome! 🎉
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ---
 
-## Dashboard (Example EA)
+## 📝 License
 
-```
-┌ SolunaAI ───── Example v1.0 ─ [X] ┐
-│                                     │
-│  ▲ BULLISH                          │
-│  ████████████░░░░  75%              │
-│                                     │
-│ ┌ AI ANALYSIS ────────────────────┐ │
-│ │ Decision: BUY    Risk: MEDIUM   │ │
-│ │ Model: openai                   │ │
-│ │ [FRESH]  Updated: 14:30         │ │
-│ │ Confidence: 75%                 │ │
-│ └─────────────────────────────────┘ │
-│                                     │
-│ ┌ KEY LEVELS ─────────────────────┐ │
-│ │ Entry: 2345.50    SL: 2340.00   │ │
-│ │ TP: 2355.00                     │ │
-│ └─────────────────────────────────┘ │
-│                                     │
-│ ┌ REASON ─────────────────────────┐ │
-│ │ RSI oversold with MACD bullish  │ │
-│ │ crossover near BB lower band    │ │
-│ └─────────────────────────────────┘ │
-└─────────────────────────────────────┘
-```
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## License
+## 🙏 Acknowledgments
 
-© Lowcode 2026 — [t.me/Iowcode](https://t.me/Iowcode)
+- [Pollinations.ai](https://pollinations.ai) - Free AI Models
+- [DeepInfra](https://deepinfra.com) - Free AI Infrastructure
+- MetaTrader Community
 
-- Pollinations + DeepInfra เป็นบริการฟรี อาจมีช่วงที่ไม่เสถียร — ระบบ auto-fallback จะช่วยลดปัญหานี้
-- Request ถี่เกินไป (< 45 วินาที) อาจทำให้ถูก rate limit
-- Example EA เป็นตัวอย่าง display-only — ต้องเพิ่ม trade execution logic เอง
+---
+
+## 📞 Support & Contact
+
+- 📧 Email: support@yourproject.com
+- 💬 Telegram: [@Iowcode](https://t.me/Iowcode)
+- 🐛 Issues: [GitHub Issues](https://github.com/lowcode-np/API-EA-AI/issues)
+
+---
+
+<div align="center">
+
+**Made with ❤️ by [Lowcode](https://t.me/Iowcode)**
+
+⭐ **Star this repo if you find it helpful!** ⭐
+
+</div>
