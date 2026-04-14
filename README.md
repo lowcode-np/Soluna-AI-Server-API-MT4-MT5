@@ -446,7 +446,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support & Contact
 
-- 📧 Email: support@yourproject.com
+- 📧 Email: witsoftware.ai@gmail.com
 - 💬 Telegram: [@Iowcode](https://t.me/Iowcode)
 - 🐛 Issues: [GitHub Issues](https://github.com/lowcode-np/API-EA-AI/issues)
 
