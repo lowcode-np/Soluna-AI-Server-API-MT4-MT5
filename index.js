@@ -22,10 +22,10 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
-// Rate limiter: /analyze — 30 req/min per IP
+// Rate limiter: /analyze — 60 req/min per IP (รองรับ EA หลายตัว)
 const analyzeLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 30,
+    max: 60,
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'Too many requests. Try again later.' }
@@ -55,6 +55,52 @@ function isValidApiKey(input) {
 
 // AI provider request timeout (ms)
 const AI_FETCH_TIMEOUT = 30000;
+
+// ===== Concurrency Limiter =====
+// จำกัดจำนวน AI calls ที่ยิงพร้อมกัน ป้องกัน provider โดน flood
+const MAX_CONCURRENT_AI_CALLS = 5;
+let activeAICalls = 0;
+const aiCallQueue = [];
+
+function acquireAISlot() {
+    return new Promise(resolve => {
+        if (activeAICalls < MAX_CONCURRENT_AI_CALLS) {
+            activeAICalls++;
+            resolve();
+        } else {
+            aiCallQueue.push(resolve);
+        }
+    });
+}
+
+function releaseAISlot() {
+    activeAICalls--;
+    if (aiCallQueue.length > 0) {
+        activeAICalls++;
+        const next = aiCallQueue.shift();
+        next();
+    }
+}
+
+// ===== Global Provider Cooldown =====
+// เมื่อ provider โดน 429 → cooldown ทั้ง server ไม่ใช่แค่ request เดียว
+const providerCooldown = new Map(); // provider name → cooldown until timestamp
+const COOLDOWN_MS = 60 * 1000; // 1 นาที
+
+function isProviderCoolingDown(providerName) {
+    const until = providerCooldown.get(providerName);
+    if (!until) return false;
+    if (Date.now() >= until) {
+        providerCooldown.delete(providerName);
+        return false;
+    }
+    return true;
+}
+
+function setProviderCooldown(providerName) {
+    providerCooldown.set(providerName, Date.now() + COOLDOWN_MS);
+    console.log(`  [COOLDOWN] ${providerName} cooled down for ${COOLDOWN_MS / 1000}s`);
+}
 
 // ===== Analysis Cache =====
 // Cache TTL per timeframe (ms) — แต่ละ timeframe มีอายุ cache ต่างกัน
@@ -248,16 +294,17 @@ async function askAI(systemPrompt, userPrompt, preferredModel) {
         }
     }
     // จำกัด fallback ไม่ให้ลองเกิน MAX_FALLBACK_ATTEMPTS ตัว
-    providers = providers.slice(0, MAX_FALLBACK_ATTEMPTS);
+    // กรอง provider ที่อยู่ใน cooldown ออก (โดน 429 จาก request อื่น)
+    providers = providers
+        .filter(p => !isProviderCoolingDown(p.name))
+        .slice(0, MAX_FALLBACK_ATTEMPTS);
+
+    if (providers.length === 0) {
+        throw new Error('All providers are in cooldown. Try again in 1 minute.');
+    }
 
     const errors = [];
-    const rateLimitedProviders = new Set(); // track provider ที่โดน rate limit
     for (const provider of providers) {
-        // ข้าม provider ที่โดน rate limit แล้ว (เช่น Pollinations โดน 429 → ข้ามทุก Pollinations model)
-        if (rateLimitedProviders.has(provider.name)) {
-            console.log(`  -> Skipped: ${provider.name}/${provider.model} (provider rate-limited)`);
-            continue;
-        }
         try {
             const resp = await fetch(provider.url, {
                 method: 'POST',
@@ -274,10 +321,10 @@ async function askAI(systemPrompt, userPrompt, preferredModel) {
             if (!resp.ok) {
                 const errText = await resp.text();
                 if (resp.status === 429) {
-                    console.log(`  -> Rate limited (429) on ${provider.name} - skipping this provider`);
-                    rateLimitedProviders.add(provider.name);
+                    console.log(`  -> Rate limited (429) on ${provider.name} - global cooldown`);
+                    setProviderCooldown(provider.name); // cooldown ทั้ง server
                     errors.push(`${provider.model}: Rate limited`);
-                    continue; // ลอง provider อื่นต่อ (เช่น DeepInfra)
+                    continue; // ลอง provider อื่นต่อ
                 }
                 throw new Error(`HTTP ${resp.status}: ${errText.substring(0, 100)}`);
             }
@@ -310,6 +357,14 @@ app.get('/health', (_req, res) => {
             hit_rate: (cacheStats.hits + cacheStats.misses) > 0
                 ? ((cacheStats.hits / (cacheStats.hits + cacheStats.misses)) * 100).toFixed(1) + '%'
                 : '0%'
+        },
+        concurrency: {
+            active_ai_calls: activeAICalls,
+            max_concurrent: MAX_CONCURRENT_AI_CALLS,
+            queued: aiCallQueue.length,
+            cooldowns: Object.fromEntries(
+                [...providerCooldown.entries()].map(([k, v]) => [k, Math.round((v - Date.now()) / 1000) + 's'])
+            )
         },
         timestamp: new Date().toISOString()
     });
@@ -557,6 +612,8 @@ app.post('/analyze', analyzeLimiter, async (req, res) => {
         console.log(`  [CACHE MISS] ${cacheKey} — calling AI...`);
 
         // สร้าง promise แล้วเก็บใน inflight map
+        // acquireAISlot() จะรอจนกว่าจะมี slot ว่าง (ป้องกัน provider flood)
+        await acquireAISlot();
         const analysisPromise = performAnalysis(d);
         inflightRequests.set(cacheKey, analysisPromise);
 
@@ -572,6 +629,7 @@ app.post('/analyze', analyzeLimiter, async (req, res) => {
             res.json({ ...data, cached: false });
         } finally {
             inflightRequests.delete(cacheKey);
+            releaseAISlot();
         }
 
     } catch (error) {

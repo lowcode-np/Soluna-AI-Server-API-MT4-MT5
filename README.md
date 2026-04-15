@@ -265,7 +265,7 @@ curl -X POST https://your-api.com/analyze \
 
 // Input Parameters
 input ENUM_AI_MODEL InpModel  = MODEL_AUTO;
-input string InpApiUrl        = "https://axer-ai.onrender.com";
+input string InpApiUrl        = "";
 input string InpApiKey        = "";
 
 // Global AI Connector
