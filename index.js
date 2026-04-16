@@ -58,7 +58,7 @@ const AI_FETCH_TIMEOUT = 30000;
 
 // ===== Concurrency Limiter =====
 // จำกัดจำนวน AI calls ที่ยิงพร้อมกัน ป้องกัน provider โดน flood
-const MAX_CONCURRENT_AI_CALLS = 5;
+const MAX_CONCURRENT_AI_CALLS = 1;
 let activeAICalls = 0;
 const aiCallQueue = [];
 
