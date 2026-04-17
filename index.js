@@ -558,27 +558,52 @@ async function performAnalysis(d) {
         ).join('; ')
         : 'none';
 
-    const systemPrompt = `You are a professional trading analyst. Analyze the provided market data and return a JSON trading decision.
+    const systemPrompt = `You are an elite institutional trading analyst. Analyze ALL provided data using this weighted framework and return a JSON decision.
 
-DECISION RULES (STRICTLY FOLLOW):
-- BUY: At least 3 indicators align bullish (RSI<35 rising, MACD histogram positive/crossing up, price above MA20, Stoch K crossing above D from oversold, price near BB lower). Entry_price MUST equal the current Ask price.
-- SELL: At least 3 indicators align bearish (RSI>65 falling, MACD histogram negative/crossing down, price below MA20, Stoch K crossing below D from overbought, price near BB upper). Entry_price MUST equal the current Bid price.
-- HOLD: When indicators conflict, RSI is 40-60, no clear setup, MACD flat, or price is mid-range in BB. HOLD is the DEFAULT — only signal BUY/SELL when evidence is strong.
+ANALYSIS FRAMEWORK (analyze in order of weight):
+
+1. TREND STRUCTURE (weight 35%):
+   - MA alignment: MA20>MA50>MA200 = bullish, MA20<MA50<MA200 = bearish
+   - Price position: above/below MA20 and MA50
+   - Trend field confirms direction
+   - Higher weight when all MAs align; lower when mixed
+
+2. MOMENTUM & REVERSALS (weight 30%):
+   - RSI: <30 oversold (potential BUY), >70 overbought (potential SELL), divergence from price = strong signal
+   - RSI 40-60 is neutral but NOT a blocker — check other factors
+   - MACD: histogram direction change = early signal, line crossover = confirmation
+   - Stochastic: K/D crossover in extreme zones (<20 or >80) adds confluence
+
+3. VOLATILITY & KEY LEVELS (weight 20%):
+   - Bollinger Bands: price at lower band + squeeze = BUY setup, upper band + squeeze = SELL setup
+   - ATR for volatility context and stop placement
+   - Recent high/low as support/resistance levels
+   - Price near support + bullish signals = BUY, near resistance + bearish signals = SELL
+
+4. PRICE ACTION (weight 15%):
+   - Analyze the candle data for patterns (engulfing, pin bars, doji at extremes)
+   - Consecutive same-direction candles = momentum
+   - Long wicks = rejection
+
+DECISION LOGIC:
+- BUY: Trend structure + at least 1 momentum confirmation + favorable level/price action
+- SELL: Trend structure + at least 1 momentum confirmation + favorable level/price action
+- HOLD: Only when signals genuinely conflict or market is ranging with no edge
+- Do NOT default to HOLD — if analysis shows a directional bias with reasonable confluence, signal it
 
 PRICING RULES:
-- entry_price: MUST be current Ask (for BUY) or current Bid (for SELL), or 0 for HOLD.
-- stop_loss: Place beyond ATR*1.5 from entry. For BUY: entry - ATR*1.5. For SELL: entry + ATR*1.5. Must be > 0 for BUY/SELL, 0 for HOLD.
-- take_profit: Minimum 1.5:1 reward:risk ratio from entry. Must be > 0 for BUY/SELL, 0 for HOLD.
-- support: Nearest support level from recent low, BB lower, or MA levels.
-- resistance: Nearest resistance level from recent high, BB upper, or MA levels.
+- entry_price: Current Ask for BUY, current Bid for SELL, 0 for HOLD
+- stop_loss: Beyond nearest structure level or ATR*1.5 from entry. Must be > 0 for BUY/SELL
+- take_profit: Minimum 1.5:1 reward:risk ratio. Must be > 0 for BUY/SELL
+- support/resistance: Nearest levels from recent high/low, BB bands, or MA levels
 
-CONFIDENCE RULES:
-- 1-30: Weak signal, should likely be HOLD
-- 31-60: Moderate signal
-- 61-100: Strong signal with multiple confirmations
-- If confidence < 30, decision MUST be HOLD.
+CONFIDENCE SCALE:
+- 15-40: Weak confluence, marginal setup
+- 41-65: Moderate confluence, acceptable setup
+- 66-85: Strong confluence, high-probability setup
+- 86-100: Exceptional confluence, multiple timeframe alignment
 
-OUTPUT: Reply with valid JSON only. No markdown, no explanation outside JSON. Keep reason under 180 characters.
+OUTPUT: Valid JSON only. No markdown. Keep reason under 180 chars.
 {"decision":"BUY|SELL|HOLD","confidence":1-100,"entry_price":number,"stop_loss":number,"take_profit":number,"reason":"string","risk_level":"LOW|MEDIUM|HIGH","key_levels":{"support":number,"resistance":number}}`;
 
     const prompt = `[MARKET DATA] ${d.symbol} ${d.timeframe} at ${d.server_time}
@@ -637,13 +662,13 @@ BB Upper:${d.bb_upper} Middle:${d.bb_middle} Lower:${d.bb_lower}
         } else if ((decision === 'BUY' || decision === 'SELL') && (sl <= 0 || tp <= 0)) {
             forceHold = true;
             holdReason = `Forced HOLD: AI said ${decision} but SL=${sl} TP=${tp} invalid`;
-        } else if (confidence < 30 && (decision === 'BUY' || decision === 'SELL')) {
+        } else if (confidence < 15 && (decision === 'BUY' || decision === 'SELL')) {
             forceHold = true;
             holdReason = `Forced HOLD: confidence ${confidence}% too low for ${decision}`;
-        } else if (decision === 'BUY' && ask > 0 && Math.abs(entryPrice - ask) > ask * 0.01) {
+        } else if (decision === 'BUY' && ask > 0 && Math.abs(entryPrice - ask) > ask * 0.02) {
             forceHold = true;
             holdReason = `Forced HOLD: BUY entry ${entryPrice} too far from Ask ${ask}`;
-        } else if (decision === 'SELL' && bid > 0 && Math.abs(entryPrice - bid) > bid * 0.01) {
+        } else if (decision === 'SELL' && bid > 0 && Math.abs(entryPrice - bid) > bid * 0.02) {
             forceHold = true;
             holdReason = `Forced HOLD: SELL entry ${entryPrice} too far from Bid ${bid}`;
         }
