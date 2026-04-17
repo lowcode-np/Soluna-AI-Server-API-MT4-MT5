@@ -34,6 +34,7 @@ int HttpSendRequestW(int,string,int,uchar &arr[],int);
 int InternetOpenUrlW(int,string,string,int,int,int);
 int InternetReadFile(int,uchar &arr[],int,int &OneInt[]);
 int InternetCloseHandle(int);
+bool InternetSetOptionW(int,int,int &buf[],int);
 #import
 
 //+------------------------------------------------------------------+
@@ -460,6 +461,12 @@ bool CAI_Connector::HttpPost(const string url, const string headers_str,
       http_code = -1;
       return false;
    }
+
+   // Set timeouts to 60s (Render free tier cold start can take 30-50s)
+   int timeout[1]; timeout[0] = 60000;
+   InternetSetOptionW(hInternet, 2, timeout, 4); // INTERNET_OPTION_CONNECT_TIMEOUT
+   InternetSetOptionW(hInternet, 5, timeout, 4); // INTERNET_OPTION_SEND_TIMEOUT
+   InternetSetOptionW(hInternet, 6, timeout, 4); // INTERNET_OPTION_RECEIVE_TIMEOUT
 
    int hConnect = InternetConnectW(hInternet, host, port, "", "", 3, 0, 0);
    if(hConnect == 0)
