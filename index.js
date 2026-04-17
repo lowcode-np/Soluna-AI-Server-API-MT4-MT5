@@ -329,6 +329,8 @@ async function askAI(systemPrompt, userPrompt, preferredModel) {
 
     const errors = [];
     for (const provider of providers) {
+        // Re-check cooldown mid-loop (provider may have been cooled down by earlier iteration)
+        if (isProviderCoolingDown(provider.name)) continue;
         try {
             const resp = await fetch(provider.url, {
                 method: 'POST',
@@ -349,6 +351,12 @@ async function askAI(systemPrompt, userPrompt, preferredModel) {
                     setProviderCooldown(provider.name); // cooldown ทั้ง server
                     errors.push(`${provider.model}: Rate limited`);
                     continue; // ลอง provider อื่นต่อ
+                }
+                if (resp.status >= 500) {
+                    console.log(`  -> Server error (${resp.status}) on ${provider.name} - global cooldown`);
+                    setProviderCooldown(provider.name); // cooldown ทั้ง provider → skip ไป provider อื่น
+                    errors.push(`${provider.model}: Server ${resp.status}`);
+                    continue;
                 }
                 throw new Error(`HTTP ${resp.status}: ${errText.substring(0, 100)}`);
             }
