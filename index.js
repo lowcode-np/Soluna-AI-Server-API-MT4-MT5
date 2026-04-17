@@ -128,8 +128,8 @@ const inflightRequests = new Map();
 // Cache stats
 let cacheStats = { hits: 0, misses: 0, coalesced: 0, evictions: 0 };
 
-function getCacheKey(symbol, timeframe, model) {
-    return `${symbol}:${timeframe}:${model || 'auto'}`;
+function getCacheKey(symbol, timeframe, model, utcSlot) {
+    return `${symbol}:${timeframe}:${model || 'auto'}:${utcSlot || ''}`;
 }
 
 function getCacheTTL(timeframe) {
@@ -178,6 +178,30 @@ setInterval(() => {
     }
     if (cleaned > 0) console.log(`  Cache cleanup: removed ${cleaned} expired entries`);
 }, 5 * 60 * 1000);
+
+// Timeframe → milliseconds
+const TF_MS = {
+    'M1': 60000, 'M5': 300000, 'M15': 900000, 'M30': 1800000,
+    'H1': 3600000, 'H4': 14400000, 'D1': 86400000, 'W1': 604800000, 'MN1': 2592000000
+};
+
+// Compute UTC candle slot from broker server_time + gmt_offset + timeframe
+// Returns ISO-like string floored to the timeframe boundary, e.g. "2026-04-17T06" for H1
+function getUtcCandleSlot(serverTime, gmtOffsetSec, timeframe) {
+    if (!serverTime) return '';
+    // Parse broker server_time (format: "2026.04.17 15:00" or "2026-04-17 15:00")
+    const normalized = serverTime.replace(/\./g, '-');
+    const brokerMs = new Date(normalized).getTime();
+    if (isNaN(brokerMs)) return '';
+    // Convert to UTC
+    const utcMs = brokerMs - (gmtOffsetSec || 0) * 1000;
+    // Floor to timeframe boundary
+    const tfMs = TF_MS[timeframe] || TF_MS['H1'];
+    const slotMs = Math.floor(utcMs / tfMs) * tfMs;
+    const d = new Date(slotMs);
+    // Compact ISO format (no seconds) for cache key
+    return d.toISOString().replace(/:\d{2}\.\d{3}Z$/, '');
+}
 
 // ===== AI Providers =====
 // Hardcoded fallback list (ใช้เมื่อ fetch dynamic ล้มเหลว)
@@ -526,18 +550,50 @@ async function performAnalysis(d) {
         ).join('; ')
         : 'none';
 
-    const prompt = `Analyze ${d.symbol} ${d.timeframe} at ${d.server_time}:
-Price:${d.bid}/${d.ask} Spd:${d.spread} DayOpen:${d.day_open} Chg:${d.day_change}(${d.day_change_pct}%)
-Trend:${d.trend} MA:20=${d.ma20},50=${d.ma50},200=${d.ma200}
-RSI:${d.rsi} MACD:${d.macd_main}/${d.macd_signal}/${d.macd_histogram} Stoch:${d.stoch_k}/${d.stoch_d}
-ATR:${d.atr} BB:${d.bb_upper}/${d.bb_middle}/${d.bb_lower}
-S/R:H${d.recent_high} L${d.recent_low}
-Acct:Bal${d.account_balance} Eq${d.account_equity} FM${d.free_margin}
-Pos:${positions}
-Candles(O/H/L/C):${candles}
-Reply JSON:{decision:BUY/SELL/HOLD,confidence:1-100,entry_price,stop_loss,take_profit,reason:"max 180 chars",risk_level:LOW/MEDIUM/HIGH,key_levels:{support,resistance}}`;
+    const systemPrompt = `You are a professional trading analyst. Analyze the provided market data and return a JSON trading decision.
 
-    const systemPrompt = "Expert trading analyst. Reply valid JSON only, no markdown. Keep reason under 180 characters.";
+DECISION RULES (STRICTLY FOLLOW):
+- BUY: At least 3 indicators align bullish (RSI<35 rising, MACD histogram positive/crossing up, price above MA20, Stoch K crossing above D from oversold, price near BB lower). Entry_price MUST equal the current Ask price.
+- SELL: At least 3 indicators align bearish (RSI>65 falling, MACD histogram negative/crossing down, price below MA20, Stoch K crossing below D from overbought, price near BB upper). Entry_price MUST equal the current Bid price.
+- HOLD: When indicators conflict, RSI is 40-60, no clear setup, MACD flat, or price is mid-range in BB. HOLD is the DEFAULT — only signal BUY/SELL when evidence is strong.
+
+PRICING RULES:
+- entry_price: MUST be current Ask (for BUY) or current Bid (for SELL), or 0 for HOLD.
+- stop_loss: Place beyond ATR*1.5 from entry. For BUY: entry - ATR*1.5. For SELL: entry + ATR*1.5. Must be > 0 for BUY/SELL, 0 for HOLD.
+- take_profit: Minimum 1.5:1 reward:risk ratio from entry. Must be > 0 for BUY/SELL, 0 for HOLD.
+- support: Nearest support level from recent low, BB lower, or MA levels.
+- resistance: Nearest resistance level from recent high, BB upper, or MA levels.
+
+CONFIDENCE RULES:
+- 1-30: Weak signal, should likely be HOLD
+- 31-60: Moderate signal
+- 61-100: Strong signal with multiple confirmations
+- If confidence < 30, decision MUST be HOLD.
+
+OUTPUT: Reply with valid JSON only. No markdown, no explanation outside JSON. Keep reason under 180 characters.
+{"decision":"BUY|SELL|HOLD","confidence":1-100,"entry_price":number,"stop_loss":number,"take_profit":number,"reason":"string","risk_level":"LOW|MEDIUM|HIGH","key_levels":{"support":number,"resistance":number}}`;
+
+    const prompt = `[MARKET DATA] ${d.symbol} ${d.timeframe} at ${d.server_time}
+Bid:${d.bid} Ask:${d.ask} Spread:${d.spread}
+DayOpen:${d.day_open} DayChange:${d.day_change} (${d.day_change_pct}%)
+
+[TREND] ${d.trend}
+MA20:${d.ma20} MA50:${d.ma50} MA200:${d.ma200}
+
+[INDICATORS]
+RSI(14):${d.rsi}
+MACD:${d.macd_main} Signal:${d.macd_signal} Hist:${d.macd_histogram}
+Stoch K:${d.stoch_k} D:${d.stoch_d}
+ATR(14):${d.atr}
+BB Upper:${d.bb_upper} Middle:${d.bb_middle} Lower:${d.bb_lower}
+
+[KEY LEVELS] RecentHigh:${d.recent_high} RecentLow:${d.recent_low}
+
+[ACCOUNT] Balance:${d.account_balance} Equity:${d.account_equity} FreeMargin:${d.free_margin}
+
+[POSITIONS] ${positions}
+
+[CANDLES] ${candles}`;
 
     // Sanitize preferred_model
     const preferredModel = (d.preferred_model || 'auto').replace(/[^a-zA-Z0-9\-_.\/]/g, '');
@@ -552,6 +608,50 @@ Reply JSON:{decision:BUY/SELL/HOLD,confidence:1-100,entry_price,stop_loss,take_p
         parsed = JSON.parse(cleaned);
     } catch (_e) {
         parsed = null;
+    }
+
+    // ===== Server-side validation: force HOLD on invalid AI responses =====
+    if (parsed && typeof parsed === 'object') {
+        const decision = (parsed.decision || '').toUpperCase();
+        const entryPrice = Number(parsed.entry_price) || 0;
+        const sl = Number(parsed.stop_loss) || 0;
+        const tp = Number(parsed.take_profit) || 0;
+        const confidence = Number(parsed.confidence) || 0;
+        const bid = Number(d.bid) || 0;
+        const ask = Number(d.ask) || 0;
+
+        let forceHold = false;
+        let holdReason = '';
+
+        if ((decision === 'BUY' || decision === 'SELL') && entryPrice <= 0) {
+            forceHold = true;
+            holdReason = `Forced HOLD: AI said ${decision} but entry_price=0`;
+        } else if ((decision === 'BUY' || decision === 'SELL') && (sl <= 0 || tp <= 0)) {
+            forceHold = true;
+            holdReason = `Forced HOLD: AI said ${decision} but SL=${sl} TP=${tp} invalid`;
+        } else if (confidence < 30 && (decision === 'BUY' || decision === 'SELL')) {
+            forceHold = true;
+            holdReason = `Forced HOLD: confidence ${confidence}% too low for ${decision}`;
+        } else if (decision === 'BUY' && ask > 0 && Math.abs(entryPrice - ask) > ask * 0.01) {
+            forceHold = true;
+            holdReason = `Forced HOLD: BUY entry ${entryPrice} too far from Ask ${ask}`;
+        } else if (decision === 'SELL' && bid > 0 && Math.abs(entryPrice - bid) > bid * 0.01) {
+            forceHold = true;
+            holdReason = `Forced HOLD: SELL entry ${entryPrice} too far from Bid ${bid}`;
+        }
+
+        if (forceHold) {
+            console.log(`  [VALIDATION] ${holdReason}`);
+            parsed.original_decision = parsed.decision;
+            parsed.original_confidence = parsed.confidence;
+            parsed.decision = 'HOLD';
+            parsed.confidence = Math.min(confidence, 25);
+            parsed.entry_price = 0;
+            parsed.stop_loss = 0;
+            parsed.take_profit = 0;
+            parsed.reason = holdReason.substring(0, 180);
+            parsed.risk_level = 'LOW';
+        }
     }
 
     return {
@@ -578,7 +678,9 @@ app.post('/analyze', analyzeLimiter, async (req, res) => {
         }
 
         const preferredModel = (d.preferred_model || 'auto').replace(/[^a-zA-Z0-9\-_.\/]/g, '');
-        const cacheKey = getCacheKey(d.symbol, d.timeframe, preferredModel);
+        // Normalize candle time to UTC slot — ทุก Broker ที่อยู่ช่วงเวลาเดียวกันจะได้ cache key เดียวกัน
+        const utcSlot = getUtcCandleSlot(d.server_time, d.gmt_offset, d.timeframe);
+        const cacheKey = getCacheKey(d.symbol, d.timeframe, preferredModel, utcSlot);
 
         // ===== 1) Check cache =====
         // ข้าม cache ถ้า client ส่ง no_cache=true

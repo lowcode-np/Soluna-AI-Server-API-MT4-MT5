@@ -120,6 +120,7 @@ private:
    int               m_timeout;
    string            m_custom_model;
    bool              m_no_cache;
+   int               m_gmt_offset;
 
    // --- JSON helpers ---
    string            JsonEscape(const string text);
@@ -164,8 +165,10 @@ public:
    void              SetTimeout(int ms)                   { m_timeout = ms; }
    void              SetCustomModel(const string name)    { m_custom_model = name; }
    void              SetNoCache(bool val)                 { m_no_cache = val; }
+   void              SetGmtOffset(int seconds)            { m_gmt_offset = seconds; }
    string            GetApiUrl() const                    { return m_api_url; }
    bool              GetNoCache() const                   { return m_no_cache; }
+   int               GetGmtOffset() const                 { return m_gmt_offset; }
 
    // --- Health check ---
    bool              CheckHealth(int &provider_count);
@@ -206,6 +209,7 @@ CAI_Connector::CAI_Connector()
    m_timeout      = 30000;
    m_custom_model = "";
    m_no_cache     = false;
+   m_gmt_offset   = 0;
 }
 
 //+------------------------------------------------------------------+
@@ -299,6 +303,7 @@ string CAI_Connector::BuildRequestBody(const string symbol, const string timefra
    b += "\"account_equity\":" + Dbl(equity, 2) + ",";
    b += "\"free_margin\":" + Dbl(free_margin, 2) + ",";
    b += "\"server_time\":\"" + JsonEscape(server_time) + "\",";
+   b += "\"gmt_offset\":" + IntegerToString(m_gmt_offset) + ",";
    b += "\"candles\":[" + cj + "],";
    b += "\"positions\":[" + pj + "]";
    if(m_no_cache) b += ",\"no_cache\":true";
@@ -706,6 +711,7 @@ bool CAI_Connector::AnalyzeCurrentChart(ENUM_AI_MODEL model, int candle_count, A
    double fm      = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
 
    string server_time = TimeToString(TimeCurrent(), TIME_DATE | TIME_MINUTES);
+   m_gmt_offset = (int)(TimeCurrent() - TimeGMT());
 
    if(candle_count > 100) candle_count = 100;
    AI_Candle candles[];
@@ -811,6 +817,7 @@ bool CAI_Connector::AnalyzeCurrentChart(ENUM_AI_MODEL model, int candle_count, A
    double fm      = AccountFreeMargin();
 
    string server_time = TimeToString(TimeCurrent(), TIME_DATE | TIME_MINUTES);
+   m_gmt_offset = (int)(TimeCurrent() - TimeGMT());
 
    if(candle_count > 100) candle_count = 100;
    AI_Candle candles[];
